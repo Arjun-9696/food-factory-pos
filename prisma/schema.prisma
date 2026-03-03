@@ -1,0 +1,111 @@
+// ============================================================================
+// FOOD FACTORY POS - Prisma Schema
+// Using SQLite for local development
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================================================
+// Models
+// ============================================================================
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  displayName  String?   @map("display_name")
+  phone        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  
+  role         UserRole?
+  profile      Profile?
+  orders       Order[]
+
+  @@map("users")
+}
+
+model Profile {
+  id          String   @id @default(uuid())
+  userId      String   @unique @map("user_id")
+  displayName String?  @map("display_name")
+  phone       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  role      String   // "admin" or "user"
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_roles")
+}
+
+model Product {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  category    String
+  price       Float
+  isVeg       Boolean     @default(true) @map("is_veg")
+  image       String?
+  available   Boolean     @default(true)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  
+  orderItems  OrderItem[]
+
+  @@index([category])
+  @@map("products")
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  orderNumber   String      @unique @map("order_number")
+  customerPhone String?     @map("customer_phone")
+  subtotal      Float
+  discount      Float       @default(0)
+  gst           Float       @default(0)
+  grandTotal    Float       @map("grand_total")
+  status        String      @default("completed")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  
+  userId        String?     @map("created_by")
+  user          User?       @relation(fields: [userId], references: [id])
+  items         OrderItem[]
+
+  @@index([userId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id            String   @id @default(uuid())
+  orderId       String   @map("order_id")
+  productId     String?  @map("product_id")
+  productName   String   @map("product_name")
+  productPrice  Float    @map("product_price")
+  quantity      Int      @default(1)
+  total         Float
+  createdAt     DateTime @default(now()) @map("created_at")
+  
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product? @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}
