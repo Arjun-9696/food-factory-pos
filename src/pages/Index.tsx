@@ -237,6 +237,16 @@ function POSContent() {
         {isMobile && (
           <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
         )}
+
+        <footer className="hidden md:block border-t bg-background/80 backdrop-blur-sm">
+          <div className="container mx-auto px-4 py-3 text-center">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-semibold text-orange-600">Food Factory POS</span> v1.0.0
+              <span className="mx-2">•</span>
+              © {new Date().getFullYear()} <span className="text-foreground">Food Factory – The Quality Taste</span>
+            </p>
+          </div>
+        </footer>
       </div>
     </div>
   );
