@@ -32,8 +32,9 @@ interface CartDrawerProps {
 }
 
 // Panel rendered inside the ExpandableScreen — QR + "Payment Done" button
-function QRPaymentPanel({ grandTotal, onPaid, saving }: {
+function QRPaymentPanel({ grandTotal, orderNumber, onPaid, saving }: {
   grandTotal: number;
+  orderNumber: string;
   onPaid: () => Promise<void>;
   saving: boolean;
 }) {
@@ -55,7 +56,7 @@ function QRPaymentPanel({ grandTotal, onPaid, saving }: {
       </div>
 
       {/* QR component (scrolls inside the modal) */}
-      <PaymentQR grandTotal={grandTotal} />
+      <PaymentQR grandTotal={grandTotal} orderNumber={orderNumber} />
 
       {/* Payment Done button */}
       <div className="px-4 pb-6 pt-2 flex-shrink-0">
@@ -379,8 +380,8 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
 
       {/* QR */}
       <div className="flex justify-center">
-        <div className="p-4 bg-white rounded-xl shadow-inner">
-          <PaymentQR grandTotal={grandTotal}/>
+        <div className="p-4 bg-white dark:bg-gray-900 rounded-xl shadow-inner">
+          <PaymentQR grandTotal={grandTotal} orderNumber={orderNumber}/>
         </div>
       </div>
 

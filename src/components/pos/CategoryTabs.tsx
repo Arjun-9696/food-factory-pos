@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useEffect, useState } from "react";
 
 interface CategoryTabsProps {
   active: string;
@@ -84,37 +84,88 @@ const categoryEmojis: Record<string, string> = {
 
 export function CategoryTabs({ active, onSelect, categories = ["All"] }: CategoryTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [isHovering, setIsHovering] = useState(false);
+  const scrollPosRef = useRef(0);
+  const frameRef = useRef<number>();
+  const isPausedRef = useRef(false);
 
-  const scrollToActive = () => {
+  // Single set of unique categories from database
+  const uniqueCategories = [...new Set(categories)];
+
+  // Smooth infinite scroll marquee with pause on hover
+  useEffect(() => {
     const container = scrollRef.current;
-    const activeBtn = container?.querySelector(`[data-active="true"]`);
-    if (container && activeBtn) {
-      const containerRect = container.getBoundingClientRect();
-      const activeRect = activeBtn.getBoundingClientRect();
-      const scrollLeft = activeBtn.scrollLeft + activeRect.left - containerRect.left - containerRect.width / 2 + activeRect.width / 2;
-      container.scrollTo({ left: scrollLeft, behavior: "smooth" });
+    if (!container || uniqueCategories.length <= 1) return;
+
+    const speed = 0.5;
+    
+    const animate = () => {
+      if (!isPausedRef.current) {
+        scrollPosRef.current += speed;
+        const maxScroll = container.scrollWidth / 2;
+        
+        if (scrollPosRef.current >= maxScroll) {
+          scrollPosRef.current = 0;
+        }
+        
+        container.scrollLeft = scrollPosRef.current;
+      }
+      frameRef.current = requestAnimationFrame(animate);
+    };
+
+    frameRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    };
+  }, [uniqueCategories.length]);
+
+  // Handle mouse enter/leave for pause
+  const handleMouseEnter = () => {
+    isPausedRef.current = true;
+    setIsHovering(true);
+    if (scrollRef.current) {
+      scrollPosRef.current = scrollRef.current.scrollLeft;
     }
   };
 
+  const handleMouseLeave = () => {
+    isPausedRef.current = false;
+    setIsHovering(false);
+    if (scrollRef.current) {
+      scrollPosRef.current = scrollRef.current.scrollLeft;
+    }
+  };
+
+  // Manual scroll handler
+  const handleScroll = () => {
+    if (scrollRef.current && !isPausedRef.current) {
+      scrollPosRef.current = scrollRef.current.scrollLeft;
+    }
+  };
+
+  // Duplicate categories for seamless loop
+  const allCategories = [...uniqueCategories, ...uniqueCategories];
+
   return (
-    <div className="sticky top-[73px] md:top-[73px] z-30 glass-surface border-b border-border/30">
+    <div 
+      className="sticky top-[73px] md:top-[73px] z-30 glass-surface border-b border-border/30 overflow-hidden"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <div
         ref={scrollRef}
-        className="container mx-auto px-2 md:px-4 py-3 flex gap-2 md:gap-3 overflow-x-auto scrollbar-hide snap-x"
-        style={{ scrollBehavior: "smooth" }}
+        onScroll={handleScroll}
+        className="max-w-6xl mx-auto px-2 md:px-4 py-3 flex gap-2 md:gap-3 overflow-x-auto scrollbar-hide"
+        style={{ scrollBehavior: "auto" }}
       >
-        {categories.map((cat) => (
+        {allCategories.map((cat, idx) => (
           <button
-            key={cat}
-            data-active={cat === active}
-            onClick={() => {
-              onSelect(cat);
-              setTimeout(scrollToActive, 50);
-            }}
+            key={`${cat}-${idx}`}
+            onClick={() => onSelect(cat)}
             className={`
               group flex-shrink-0 flex flex-col items-center justify-center
               min-w-[75px] md:min-w-[90px] p-2 md:p-2.5 rounded-xl
-              transition-all duration-200 cursor-pointer select-none snap-start
+              transition-all duration-200 cursor-pointer select-none
               ${cat === active 
                 ? "bg-gradient-to-br from-primary to-orange-500 text-white shadow-lg shadow-orange-500/20 -translate-y-0.5" 
                 : "bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground"

@@ -12,8 +12,13 @@ import { CartFAB } from "@/components/pos/CartFAB";
 import { ProductSkeleton } from "@/components/pos/ProductSkeleton";
 import { Highlighter } from "@/components/magicui/highlighter";
 import { Marquee } from "@/components/magicui/marquee";
+import { ProductAnimatedList } from "@/components/pos/ProductAnimatedList";
+import { MobileSearchResults } from "@/components/pos/MobileSearchResults";
+import { LayoutGrid, List, ArrowUpDown } from "lucide-react";
 
 const ITEMS_PER_PAGE = 8;
+
+type SortOption = "default" | "price-low" | "price-high" | "name-asc" | "name-desc";
 
 const CATEGORY_EMOJIS: Record<string, string> = {
   "All": "🍽️",
@@ -81,9 +86,11 @@ function POSContent() {
   const [isMobile, setIsMobile] = useState(false);
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>("default");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const scrollRef = useRef<HTMLDivElement>(null);
   const { products, categories, loading } = useProducts();
-  const { totalItems } = useCart();
+  const { totalItems, items: cartItems, addItem, updateQuantity } = useCart();
   
   const debouncedSearch = useDebounce(searchQuery, 300);
 
@@ -105,12 +112,32 @@ function POSContent() {
 
   const filtered = useMemo(() => {
     const searchLower = debouncedSearch.toLowerCase().trim();
-    return products.filter((item) => {
+    let filteredProducts = products.filter((item) => {
       const matchesCategory = activeCategory === "All" || item.category === activeCategory;
       const matchesSearch = !searchLower || item.name.toLowerCase().includes(searchLower);
       return matchesCategory && matchesSearch;
     });
-  }, [activeCategory, debouncedSearch, products]);
+
+    // Apply sorting
+    switch (sortBy) {
+      case "price-low":
+        filteredProducts = [...filteredProducts].sort((a, b) => a.price - b.price);
+        break;
+      case "price-high":
+        filteredProducts = [...filteredProducts].sort((a, b) => b.price - a.price);
+        break;
+      case "name-asc":
+        filteredProducts = [...filteredProducts].sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "name-desc":
+        filteredProducts = [...filteredProducts].sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      default:
+        break;
+    }
+
+    return filteredProducts;
+  }, [activeCategory, debouncedSearch, products, sortBy]);
 
   const visibleProducts = useMemo(() => {
     return filtered.slice(0, visibleCount);
@@ -154,7 +181,7 @@ function POSContent() {
           cartCount={totalItems}
         />
 
-        <div className="container mx-auto px-4 pt-4 pb-2">
+        <div className="max-w-6xl mx-auto px-4 pt-4 pb-2">
           <div className="text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-black dark:text-white">
               <span className="text-black dark:text-black">
@@ -171,8 +198,8 @@ function POSContent() {
         </div>
 
       <div className="hidden xl:block">
-  <div className="py-3">
-    <Marquee pauseOnHover className="[--duration:30s]">
+        <div className="max-w-6xl mx-auto py-3">
+          <Marquee pauseOnHover className="[--duration:30s]">
       {categories.map((cat) => (
         <button
           key={cat}
@@ -200,7 +227,57 @@ function POSContent() {
           <CategoryTabs active={activeCategory} onSelect={setActiveCategory} categories={categories} />
         </div>
 
-        <main ref={scrollRef} className={`container mx-auto px-4 py-4 ${isMobile ? 'pb-40' : 'pb-24'}`}>
+        {/* View Toggle & Sort Controls */}
+        <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            {filtered.length} items
+          </p>
+          <div className="flex items-center gap-2">
+            {/* Sort Dropdown */}
+            <div className="relative">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="appearance-none pl-3 pr-8 py-1.5 text-sm rounded-lg bg-secondary border border-border/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+              >
+                <option value="default">Default</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+                <option value="name-asc">Name: A-Z</option>
+                <option value="name-desc">Name: Z-A</option>
+              </select>
+              <ArrowUpDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            </div>
+
+            {/* View Toggle */}
+            <div className="flex items-center bg-secondary rounded-lg p-0.5 border border-border/50">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`p-1.5 rounded-md transition-colors ${
+                  viewMode === "grid"
+                    ? "bg-orange-500 text-white"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="Grid View"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`p-1.5 rounded-md transition-colors ${
+                  viewMode === "list"
+                    ? "bg-orange-500 text-white"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="List View"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <main ref={scrollRef} className={`max-w-6xl mx-auto px-4 py-4 ${isMobile ? 'pb-40' : 'pb-24'}`}>
           {loading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -213,25 +290,43 @@ function POSContent() {
               <p className="text-sm mt-1">Try a different search or category</p>
             </div>
           ) : isMobile ? (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                {visibleProducts.map((item) => (
-                  <ProductCard key={item.id} item={item} />
-                ))}
-              </div>
-              {loadingMore && (
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <ProductSkeleton key={`loading-${i}`} />
+            searchQuery.trim() ? (
+              <MobileSearchResults
+                query={searchQuery}
+                products={products}
+                cartItems={cartItems}
+                onAddToCart={addItem}
+                onUpdateQuantity={updateQuantity}
+                onClose={() => setSearchQuery("")}
+              />
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  {visibleProducts.map((item) => (
+                    <ProductCard key={item.id} item={item} />
                   ))}
                 </div>
-              )}
-              {!hasMore && filtered.length > 0 && (
-                <p className="text-center text-sm text-muted-foreground mt-4">
-                  You've reached the end
-                </p>
-              )}
-            </>
+                {loadingMore && (
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <ProductSkeleton key={`loading-${i}`} />
+                    ))}
+                  </div>
+                )}
+                {!hasMore && filtered.length > 0 && (
+                  <p className="text-center text-sm text-muted-foreground mt-4">
+                    You've reached the end
+                  </p>
+                )}
+              </>
+            )
+          ) : viewMode === "list" ? (
+            <ProductAnimatedList
+              products={filtered}
+              onAddToCart={addItem}
+              onUpdateQuantity={updateQuantity}
+              cartItems={cartItems}
+            />
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
               {filtered.map((item, idx) => (

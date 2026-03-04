@@ -73,6 +73,9 @@
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
   }
+  .theme {
+    --animate-background-position-spin: background-position-spin 3000ms infinite alternate;
+  }
 }
 
 @layer base {
@@ -290,7 +293,7 @@
   .border-beam {
     position: relative;
   }
-  
+
   .border-beam::after {
     content: '';
     position: absolute;
@@ -332,7 +335,7 @@
   .highlight-underline {
     position: relative;
   }
-  
+
   .highlight-underline::after {
     content: '';
     position: absolute;
@@ -350,7 +353,7 @@
     position: relative;
     overflow: hidden;
   }
-  
+
   .magic-card::before {
     content: '';
     position: absolute;
@@ -359,7 +362,7 @@
     opacity: 0;
     transition: opacity 0.3s ease;
   }
-  
+
   .magic-card:hover::before {
     opacity: 1;
   }
@@ -369,7 +372,7 @@
     position: relative;
     overflow: hidden;
   }
-  
+
   .cool-mode-btn::after {
     content: '';
     position: absolute;
@@ -378,29 +381,29 @@
     opacity: 0;
     transition: opacity 0.3s;
   }
-  
+
   .cool-mode-btn:active::after {
     opacity: 1;
   }
-  
+
   /* Smooth Theme Transition */
   .theme-transitioning {
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
   }
-  
+
   html {
     transition: background-color 0.3s ease, color 0.3s ease;
   }
-  
+
   html.dark {
     transition: background-color 0.3s ease, color 0.3s ease;
   }
-  
+
   /* Smooth icon animation */
   .theme-icon {
     animation: spin-slow 2s linear infinite;
   }
-  
+
   @keyframes spin-slow {
     from {
       transform: rotate(0deg);
@@ -471,4 +474,15 @@
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+@theme inline {
+  @keyframes background-position-spin {
+  0% {
+    background-position: top center;
+    }
+  100% {
+    background-position: bottom center;
+    }
+  }
 }
