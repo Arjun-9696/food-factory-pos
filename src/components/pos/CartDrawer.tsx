@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from "react";
-import { X, Plus, Minus, Trash2, ShoppingBag, Printer, Tag, Send, Loader2, QrCode } from "lucide-react";
+import { X, Plus, Minus, Trash2, ShoppingBag, Printer, Tag, Send, Loader2, QrCode, User, Phone } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_CONFIG } from "@/lib/appwrite";
@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import { motion } from "motion/react";
 import { PaymentQR } from "./PaymentQR";
+import { Logo } from "./Logo";
 import {
   ExpandableScreen,
   ExpandableScreenContent,
@@ -31,7 +32,6 @@ interface CartDrawerProps {
   onClose: () => void;
 }
 
-// Panel rendered inside the ExpandableScreen — QR + "Payment Done" button
 function QRPaymentPanel({ grandTotal, orderNumber, onPaid, saving }: {
   grandTotal: number;
   orderNumber: string;
@@ -48,17 +48,14 @@ function QRPaymentPanel({ grandTotal, orderNumber, onPaid, saving }: {
 
   return (
     <div className="flex flex-col overflow-y-auto max-h-[90vh]">
-      {/* Amount badge */}
       <div className="flex items-center justify-center pt-4 pb-2">
         <span className="px-5 py-1.5 rounded-full cart-gradient text-white font-bold text-base shadow-md shadow-orange-500/20">
           Pay ₹{grandTotal}
         </span>
       </div>
 
-      {/* QR component (scrolls inside the modal) */}
       <PaymentQR grandTotal={grandTotal} orderNumber={orderNumber} />
 
-      {/* Payment Done button */}
       <div className="px-4 pb-6 pt-2 flex-shrink-0">
         <button
           onClick={handlePaid}
@@ -75,22 +72,131 @@ function QRPaymentPanel({ grandTotal, orderNumber, onPaid, saving }: {
 
 function formatBillText(
   orderNumber: string,
+  customerName: string,
+  customerPhone: string,
   items: { item: { name: string; price: number }; quantity: number }[],
   subtotal: number, discount: number, gst: number, grandTotal: number,
 ) {
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
   const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  
   let text = `🍔 *Food Factory - The Quality Taste*\n`;
-  text += `📋 Order: *${orderNumber}*\n📅 ${dateStr} • ${timeStr}\n━━━━━━━━━━━━━━━━\n`;
-  items.forEach((ci) => { text += `${ci.quantity}x ${ci.item.name} — ₹${ci.item.price * ci.quantity}\n`; });
-  text += `━━━━━━━━━━━━━━━━\nSubtotal: ₹${subtotal}\n`;
+  text += `📋 Order: *${orderNumber}*\n`;
+  text += `📅 ${dateStr} • ${timeStr}\n`;
+  
+  if (customerName) {
+    text += `👤 Customer: ${customerName}\n`;
+  }
+  if (customerPhone) {
+    text += `📱 Phone: ${customerPhone}\n`;
+  }
+  
+  text += `━━━━━━━━━━━━━━━━\n`;
+  items.forEach((ci) => { 
+    text += `${ci.quantity}x ${ci.item.name} — ₹${ci.item.price * ci.quantity}\n`; 
+  });
+  text += `━━━━━━━━━━━━━━━━\n`;
+  text += `Subtotal: ₹${subtotal}\n`;
   if (discount > 0) text += `Discount: -₹${discount}\n`;
-  text += `GST (5%): ₹${gst}\n*Grand Total: ₹${grandTotal}*\n━━━━━━━━━━━━━━━━\nThank you! Visit again 🙏`;
+  text += `GST (5%): ₹${gst}\n`;
+  text += `*Grand Total: ₹${grandTotal}*\n`;
+  text += `━━━━━━━━━━━━━━━━\n`;
+  text += `Thank you! Visit again 🙏`;
   return text;
 }
 
-function saveOrderLocally(orderData: any) {
+function generateBillHTML(
+  orderNumber: string,
+  customerName: string,
+  customerPhone: string,
+  items: { item: { name: string; price: number }; quantity: number }[],
+  subtotal: number, discount: number, gst: number, grandTotal: number,
+) {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Food Factory - Bill ${orderNumber}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 15px; font-size: 11px; line-height: 1.4; max-width: 300px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px dashed #f97316; }
+    .logo { width: 50px; height: 50px; background: linear-gradient(135deg, #f97316, #fbbf24); border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+    .logo span { color: white; font-weight: bold; font-size: 18px; }
+    .brand { font-size: 18px; font-weight: 800; color: #f97316; }
+    .tagline { font-size: 8px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
+    .order-info { display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 10px; }
+    .order-number { font-size: 14px; font-weight: bold; }
+    .customer-info { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 10px; color: #555; }
+    .items { margin-bottom: 10px; }
+    .item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dotted #eee; }
+    .item:last-child { border-bottom: none; }
+    .item-qty { color: #666; margin-right: 8px; font-weight: 500; }
+    .item-name { flex: 1; }
+    .item-price { font-weight: 500; }
+    .totals { border-top: 2px dashed #f97316; padding-top: 10px; margin-top: 5px; }
+    .total-row { display: flex; justify-content: space-between; padding: 3px 0; }
+    .grand-total { font-size: 16px; font-weight: 800; border-top: 1px solid #333; padding-top: 8px; margin-top: 5px; color: #f97316; }
+    .footer { text-align: center; margin-top: 15px; padding-top: 10px; border-top: 2px dashed #f97316; color: #666; font-size: 10px; }
+    .footer p { margin: 2px 0; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo"><span>FF</span></div>
+    <div class="brand">Food Factory</div>
+    <div class="tagline">The Quality Taste</div>
+  </div>
+  
+  <div class="order-info">
+    <div>
+      <div class="order-number">#${orderNumber}</div>
+      <div>${dateStr} • ${timeStr}</div>
+    </div>
+  </div>
+  
+  ${customerName || customerPhone ? `
+  <div class="customer-info">
+    ${customerName ? `<div><strong>Customer:</strong> ${customerName}</div>` : ''}
+    ${customerPhone ? `<div><strong>Phone:</strong> ${customerPhone}</div>` : ''}
+  </div>
+  ` : ''}
+  
+  <div class="items">
+    ${items.map(ci => `
+      <div class="item">
+        <div>
+          <span class="item-qty">${ci.quantity}x</span>
+          <span class="item-name">${ci.item.name}</span>
+        </div>
+        <span class="item-price">₹${ci.item.price * ci.quantity}</span>
+      </div>
+    `).join('')}
+  </div>
+  
+  <div class="totals">
+    <div class="total-row"><span>Subtotal</span><span>₹${subtotal}</span></div>
+    ${discount > 0 ? `<div class="total-row" style="color:#16a34a"><span>Discount</span><span>-₹${discount}</span></div>` : ''}
+    <div class="total-row"><span>GST (5%)</span><span>₹${gst}</span></div>
+    <div class="total-row grand-total"><span>Total</span><span>₹${grandTotal}</span></div>
+  </div>
+  
+  <div class="footer">
+    <p>Thank you for your visit!</p>
+    <p>Visit again 🙏</p>
+    <p style="margin-top: 5px; font-size: 8px;">Food Factory - The Quality Taste</p>
+  </div>
+</body>
+</html>`;
+}
+
+function saveOrderLocally(orderData: Record<string, unknown>) {
   const stored = JSON.parse(localStorage.getItem("ff_orders") || "[]");
   stored.unshift(orderData);
   localStorage.setItem("ff_orders", JSON.stringify(stored.slice(0, 100)));
@@ -106,6 +212,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
 
   const [discountInput, setDiscountInput] = useState("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
@@ -123,6 +230,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     clearCart();
     setShowClearConfirm(false);
     setDiscountInput("");
+    setCustomerName("");
     setCustomerPhone("");
     onClose();
   }, [clearCart, onClose]);
@@ -130,6 +238,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const saveOrderToAppwrite = useCallback(async () => {
     const orderData = {
       orderNumber,
+      customerName: customerName || null,
       customerPhone: customerPhone || null,
       subtotal, discount, gst, grandTotal,
       status: "completed",
@@ -152,11 +261,12 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     } catch {
       saveOrderLocally({ ...orderData, id: "ord_" + Math.random().toString(36).substr(2, 9) });
     }
-  }, [orderNumber, customerPhone, subtotal, discount, gst, grandTotal, user, items]);
+  }, [orderNumber, customerName, customerPhone, subtotal, discount, gst, grandTotal, user, items]);
 
   const resetAfterOrder = useCallback(() => {
     clearCart();
     setDiscountInput("");
+    setCustomerName("");
     setCustomerPhone("");
   }, [clearCart]);
 
@@ -170,48 +280,20 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
 
     const printWindow = window.open("", "_blank", "width=400,height=600");
     if (!printWindow) { toast.error("Please allow popups for printing"); return; }
-    printWindow.document.write(`
-      <!DOCTYPE html><html>
-        <head><title>Food Factory - Order ${orderNumber}</title>
-        <style>
-          * { margin:0; padding:0; box-sizing:border-box; }
-          body { font-family:'Segoe UI',sans-serif; padding:20px; font-size:12px; line-height:1.4; }
-          .header { text-align:center; margin-bottom:20px; padding-bottom:15px; border-bottom:1px dashed #333; }
-          .brand { font-size:20px; font-weight:800; color:#e11d48; }
-          .tagline { font-size:10px; color:#666; letter-spacing:2px; }
-          .order-info { display:flex; justify-content:space-between; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid #eee; }
-          .order-number { font-size:16px; font-weight:bold; }
-          .item { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px dotted #eee; }
-          .item:last-child { border-bottom:none; }
-          .item-qty { color:#666; margin-right:10px; }
-          .totals { border-top:1px dashed #333; padding-top:15px; }
-          .total-row { display:flex; justify-content:space-between; padding:4px 0; }
-          .grand-total { font-size:16px; font-weight:800; border-top:1px solid #333; padding-top:10px; margin-top:5px; }
-          .footer { text-align:center; margin-top:25px; padding-top:15px; border-top:1px dashed #333; color:#666; font-size:11px; }
-        </style></head>
-        <body>
-          <div class="header"><div class="brand">Food Factory</div><div class="tagline">THE QUALITY TASTE</div></div>
-          <div class="order-info"><div><div class="order-number">#${orderNumber}</div><div>${dateStr} • ${timeStr}</div></div></div>
-          <div>${items.map(ci => `<div class="item"><div><span class="item-qty">${ci.quantity}x</span>${ci.item.name}</div><div>₹${ci.item.price * ci.quantity}</div></div>`).join("")}</div>
-          <div class="totals">
-            <div class="total-row"><span>Subtotal</span><span>₹${subtotal}</span></div>
-            ${discount > 0 ? `<div class="total-row" style="color:#16a34a"><span>Discount</span><span>-₹${discount}</span></div>` : ""}
-            <div class="total-row"><span>GST (5%)</span><span>₹${gst}</span></div>
-            <div class="total-row grand-total"><span>Total</span><span>₹${grandTotal}</span></div>
-          </div>
-          <div class="footer"><p>Thank you!</p><p>Visit again 🙏</p></div>
-        </body></html>
-    `);
+    printWindow.document.write(generateBillHTML(orderNumber, customerName, customerPhone, items, subtotal, discount, gst, grandTotal));
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => printWindow.print(), 250);
-  }, [saveOrderToAppwrite, resetAfterOrder, orderNumber, dateStr, timeStr, items, subtotal, discount, gst, grandTotal]);
+  }, [saveOrderToAppwrite, resetAfterOrder, orderNumber, customerName, customerPhone, items, subtotal, discount, gst, grandTotal]);
 
   const handleWhatsApp = useCallback(async () => {
-    if (!customerPhone.trim()) { toast.error("Enter customer phone number"); return; }
+    if (!customerPhone.trim()) { 
+      toast.error("Please enter WhatsApp number"); 
+      return; 
+    }
     setSaving(true);
     await saveOrderToAppwrite();
-    const billText = formatBillText(orderNumber, items, subtotal, discount, gst, grandTotal);
+    const billText = formatBillText(orderNumber, customerName, customerPhone, items, subtotal, discount, gst, grandTotal);
     const phone = customerPhone.replace(/\D/g, "");
     const fullPhone = phone.startsWith("91") ? phone : `91${phone}`;
     window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(billText)}`, "_blank");
@@ -219,7 +301,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     triggerConfetti();
     resetAfterOrder();
     setSaving(false);
-  }, [customerPhone, saveOrderToAppwrite, orderNumber, items, subtotal, discount, gst, grandTotal, resetAfterOrder]);
+  }, [customerPhone, saveOrderToAppwrite, orderNumber, customerName, items, subtotal, discount, gst, grandTotal, resetAfterOrder]);
 
   const handleQRPaid = useCallback(async () => {
     await saveOrderToAppwrite();
@@ -299,10 +381,31 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
         {items.length > 0 && (
           <div className="border-t flex-shrink-0">
             <div className="p-4 space-y-3">
-              <input type="tel" placeholder="Customer phone (for WhatsApp)"
-                value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-secondary border text-sm" />
+              {/* Customer Name (Optional) */}
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input 
+                  type="text" 
+                  placeholder="Customer Name (Optional)"
+                  value={customerName} 
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border text-sm" 
+                />
+              </div>
 
+              {/* WhatsApp Number (Required) */}
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input 
+                  type="tel" 
+                  placeholder="WhatsApp Number (Required) *"
+                  value={customerPhone} 
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border text-sm" 
+                />
+              </div>
+
+              {/* Discount */}
               <div className="flex gap-2">
                 <div className="flex-1 relative">
                   <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -348,61 +451,45 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                 </button>
               </div>
 
-              {/* WhatsApp + Scan & Pay (via ExpandableScreen) */}
+              {/* WhatsApp + Scan & Pay */}
               <div className="flex gap-2">
-                <button onClick={handleWhatsApp} disabled={saving}
+                <button onClick={handleWhatsApp} disabled={saving || !customerPhone.trim()}
                   className="flex-1 py-3 rounded-xl bg-veg text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
                   <Send className="w-4 h-4" /> WhatsApp
                 </button>
 
-                {/* ExpandableScreen opens centered modal on desktop/tablet, full-screen on mobile */}
-  <ExpandableScreen>
-  {/* OPEN BUTTON */}
-  <ExpandableScreenTrigger
-    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-  >
-    <QrCode className="w-4 h-4" />
-    Scan & Pay
-  </ExpandableScreenTrigger>
+                <ExpandableScreen>
+                  <ExpandableScreenTrigger
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    Scan & Pay
+                  </ExpandableScreenTrigger>
 
-  {/* CONTENT ONLY (NO fixed, NO modal classes) */}
-  <ExpandableScreenContent>
-    <div className="flex flex-col h-full p-6">
+                  <ExpandableScreenContent>
+                    <div className="flex flex-col h-full p-6">
+                      <div className="flex justify-center">
+                        <div className="p-4 bg-white rounded-xl shadow-inner">
+                          <PaymentQR grandTotal={grandTotal} orderNumber={orderNumber}/>
+                        </div>
+                      </div>
 
-      {/* Header */}
-      {/* <div className="mb-8">
-        <h2 className="text-xl font-semibold text-center">
-          Scan & Pay
-        </h2>
-      </div> */}
-
-  
-
-      {/* QR */}
-      <div className="flex justify-center">
-        <div className="p-4 bg-white dark:bg-gray-900 rounded-xl shadow-inner">
-          <PaymentQR grandTotal={grandTotal} orderNumber={orderNumber}/>
-        </div>
-      </div>
-
-      {/* Button */}
-      <div className="mt-auto">
-        <button
-          onClick={handleQRPaid}
-          disabled={saving}
-          className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold text-sm shadow-lg transition active:scale-95 disabled:opacity-50"
-        >
-          {saving ? (
-            <Loader2 className="w-4 h-4 animate-spin mx-auto" />
-          ) : (
-            "Payment Done"
-          )}
-        </button>
-      </div>
-
-    </div>
-  </ExpandableScreenContent>
-</ExpandableScreen>
+                      <div className="mt-auto">
+                        <button
+                          onClick={handleQRPaid}
+                          disabled={saving}
+                          className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold text-sm shadow-lg transition active:scale-95 disabled:opacity-50"
+                        >
+                          {saving ? (
+                            <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                          ) : (
+                            "Payment Done"
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </ExpandableScreenContent>
+                </ExpandableScreen>
               </div>
             </div>
           </div>
