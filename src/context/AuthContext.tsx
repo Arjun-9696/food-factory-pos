@@ -52,17 +52,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Create account
       await account.create("unique()", email, password, name || email.split("@")[0]);
       
-      // Create session
+      // Create session immediately after signup
       await account.createEmailPasswordSession(email, password);
       
+      // Get the created user
+      const session = await account.get();
       const isAdminEmail = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-      setUser({ id: "", email, name: name || email.split("@")[0] });
+      setUser({ id: session.$id, email: session.email, name: session.name || name || email.split("@")[0] });
       setIsAdmin(isAdminEmail);
 
       return { error: null };
     } catch (error: any) {
       console.error("Signup error:", error);
-      return { error: error.message || "Signup failed" };
+      // Check if user already exists
+      if (error.code === 409 || error.message?.includes("already exists")) {
+        return { error: "An account with this email already exists. Please sign in instead." };
+      }
+      return { error: error.message || "Signup failed. Please try again." };
     }
   };
 
@@ -71,14 +77,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await account.createEmailPasswordSession(email, password);
       const session = await account.get();
       
-      const isAdminEmail = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      const isAdminEmail = session.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
       setUser({ id: session.$id, email: session.email, name: session.name || email.split("@")[0] });
       setIsAdmin(isAdminEmail);
 
       return { error: null };
     } catch (error: any) {
       console.error("Login error:", error);
-      return { error: error.message || "Invalid email or password" };
+      // Check for specific error codes
+      if (error.code === 401 || error.message?.includes("Invalid credentials")) {
+        return { error: "Invalid email or password. Please try again." };
+      }
+      if (error.code === 429) {
+        return { error: "Too many attempts. Please wait a moment and try again." };
+      }
+      return { error: error.message || "Login failed. Please try again." };
     }
   };
 

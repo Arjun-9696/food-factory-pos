@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef } from "react";
 
 interface CategoryTabsProps {
   active: string;
@@ -84,86 +84,49 @@ const categoryEmojis: Record<string, string> = {
 
 export function CategoryTabs({ active, onSelect, categories = ["All"] }: CategoryTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [isHovering, setIsHovering] = useState(false);
-  const scrollPosRef = useRef(0);
-  const frameRef = useRef<number>();
 
-  // Smooth infinite scroll marquee - isolated from page scroll
-  useEffect(() => {
+  const scrollToActive = () => {
     const container = scrollRef.current;
-    if (!container) return;
-
-    const speed = 0.5;
-    
-    const animate = () => {
-      if (!isHovering) {
-        scrollPosRef.current += speed;
-        const maxScroll = container.scrollWidth / 2;
-        
-        if (scrollPosRef.current >= maxScroll) {
-          scrollPosRef.current = 0;
-        }
-        
-        container.scrollLeft = scrollPosRef.current;
-      }
-      frameRef.current = requestAnimationFrame(animate);
-    };
-
-    frameRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
-    };
-  }, [isHovering]);
-
-  // Duplicate for seamless loop
-  const allCategories = [...categories, ...categories];
+    const activeBtn = container?.querySelector(`[data-active="true"]`);
+    if (container && activeBtn) {
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = activeBtn.getBoundingClientRect();
+      const scrollLeft = activeBtn.scrollLeft + activeRect.left - containerRect.left - containerRect.width / 2 + activeRect.width / 2;
+      container.scrollTo({ left: scrollLeft, behavior: "smooth" });
+    }
+  };
 
   return (
-    <div 
-      className="sticky top-[73px] md:top-[73px] z-30 glass-surface border-b border-border/30 overflow-hidden"
-      onMouseEnter={() => {
-        setIsHovering(true);
-        if (scrollRef.current) {
-          scrollPosRef.current = scrollRef.current.scrollLeft;
-        }
-      }}
-      onMouseLeave={() => {
-        setIsHovering(false);
-        if (scrollRef.current) {
-          scrollPosRef.current = scrollRef.current.scrollLeft;
-        }
-      }}
-    >
+    <div className="sticky top-[73px] md:top-[73px] z-30 glass-surface border-b border-border/30">
       <div
         ref={scrollRef}
-        className="container mx-auto px-2 md:px-4 py-3 flex gap-3 md:gap-4 overflow-scroll  scrollbar-hide"
-        style={{ 
-          scrollBehavior: 'auto',
-          overflowY: 'hidden',
-          height: 'auto',
-        }}
+        className="container mx-auto px-2 md:px-4 py-3 flex gap-2 md:gap-3 overflow-x-auto scrollbar-hide snap-x"
+        style={{ scrollBehavior: "smooth" }}
       >
-        {allCategories.map((cat, idx) => (
+        {categories.map((cat) => (
           <button
-            key={`${cat}-${idx}`}
-            onClick={() => onSelect(cat)}
+            key={cat}
+            data-active={cat === active}
+            onClick={() => {
+              onSelect(cat);
+              setTimeout(scrollToActive, 50);
+            }}
             className={`
               group flex-shrink-0 flex flex-col items-center justify-center
-              min-w-[80px] md:min-w-[100px] p-2.5 md:p-3.5 rounded-2xl
-              transition-all duration-300 cursor-pointer select-none 
+              min-w-[75px] md:min-w-[90px] p-2 md:p-2.5 rounded-xl
+              transition-all duration-200 cursor-pointer select-none snap-start
               ${cat === active 
-                ? "bg-gradient-to-br from-primary to-orange-500 text-white shadow-lg shadow-orange-500/20 -translate-y-1" 
+                ? "bg-gradient-to-br from-primary to-orange-500 text-white shadow-lg shadow-orange-500/20 -translate-y-0.5" 
                 : "bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground"
               }
             `}
           >
-            {/* Image */}
-            <div className="relative z-10 mb-1.5 md:mb-2">
+            <div className="relative mb-1">
               <div 
                 className={`
-                  w-12 h-12 md:w-16 md:h-16 rounded-full overflow-hidden
-                  transition-transform duration-300
-                  ${cat === active ? "scale-110 ring-2 ring-white/60" : "group-hover:scale-105"}
+                  w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden
+                  transition-transform duration-200
+                  ${cat === active ? "scale-105 ring-2 ring-white/50" : "group-hover:scale-102"}
                 `}
               >
                 <img 
@@ -173,37 +136,19 @@ export function CategoryTabs({ active, onSelect, categories = ["All"] }: Categor
                   loading="lazy"
                 />
               </div>
-              
-              {/* Emoji Badge */}
               <div 
                 className={`
-                  absolute -bottom-0.5 -right-0.5 md:bottom-0 md:right-auto md:top-0 md:-right-1
-                  w-5 h-5 md:w-6 md:h-6 rounded-full bg-card shadow-md flex items-center justify-center text-xs md:text-sm
-                  transition-transform duration-300
-                  ${cat === active ? "scale-110" : "group-hover:scale-110"}
+                  absolute -bottom-0.5 -right-0.5
+                  w-4 h-4 md:w-5 md:h-5 rounded-full bg-card shadow-sm flex items-center justify-center text-[10px] md:text-xs
+                  ${cat === active ? "scale-110" : ""}
                 `}
               >
                 {categoryEmojis[cat] || "🍴"}
               </div>
             </div>
-
-            {/* Label */}
-            <span 
-              className={`
-                relative z-10 text-[11px] md:text-xs font-bold whitespace-nowrap
-                transition-colors duration-200
-                ${cat === active ? "text-white" : "text-muted-foreground group-hover:text-foreground"}
-              `}
-            >
+            <span className="text-[10px] md:text-xs font-medium whitespace-nowrap">
               {cat}
             </span>
-
-            {/* Active Indicator */}
-            {cat === active && (
-              <div className="absolute bottom-1 md:bottom-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-              </div>
-            )}
           </button>
         ))}
       </div>
