@@ -18,7 +18,11 @@ const ITEMS_PER_PAGE = 8;
 const CATEGORY_EMOJIS: Record<string, string> = {
   "All": "🍽️",
   "Fresh Juice": "🍊",
+  "Fresh Juices": "🍊",
   "Fruite Milk Shake": "🥤",
+  "Milkshakes": "🥤",
+  "Milkshake": "🥤",
+  "Special Milkshake": "🧋",
   "Food Factory Special": "🧋",
   "Soda": "🥤",
   "Lassi": "🥛",
@@ -29,7 +33,24 @@ const CATEGORY_EMOJIS: Record<string, string> = {
   "Sandwich": "🥪",
   "Non Veg Sandwich": "🥪",
   "Maggie": "🍜",
+  "Maggi": "🍜",
   "Non Veg Maggi": "🍜",
+  "Cold Coffee": "☕",
+  "Burgers": "🍔",
+  "Momos": "🥟",
+  "Noodles": "🍜",
+  "Fries": "🍟",
+  "Snacks": "🍿",
+  "Egg Items": "🥚",
+  "Bakery": "🍰",
+  "Desserts": "🍨",
+  "Hot Beverages": "🍵",
+  "Juice": "🧃",
+  "Coffee": "☕",
+  "Tea": "🍵",
+  "Shake": "🥤",
+  "Milk Shake": "🥤",
+  "Ice Cream": "🍦",
 };
 
 function getCategoryEmoji(category: string): string {
@@ -77,12 +98,16 @@ function POSContent() {
 
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);
+    if (debouncedSearch && activeCategory !== "All") {
+      setActiveCategory("All");
+    }
   }, [activeCategory, debouncedSearch]);
 
   const filtered = useMemo(() => {
+    const searchLower = debouncedSearch.toLowerCase().trim();
     return products.filter((item) => {
       const matchesCategory = activeCategory === "All" || item.category === activeCategory;
-      const matchesSearch = item.name.toLowerCase().includes(debouncedSearch.toLowerCase());
+      const matchesSearch = !searchLower || item.name.toLowerCase().includes(searchLower);
       return matchesCategory && matchesSearch;
     });
   }, [activeCategory, debouncedSearch, products]);
