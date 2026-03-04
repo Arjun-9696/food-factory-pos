@@ -20,8 +20,16 @@ import {
   Star
 } from "lucide-react";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "motion/react";
 import { MobileNav } from "@/components/pos/MobileNav";
 import { CartDrawer } from "@/components/pos/CartDrawer";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Address {
   $id: string;
@@ -396,16 +404,17 @@ export default function Profile() {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1 block">Gender</label>
-                    <select
-                      value={profileForm.gender}
-                      onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
-                      className="w-full px-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground"
-                    >
-                      <option value="prefer_not_to_say">Prefer not to say</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
+                    <Select value={profileForm.gender} onValueChange={(value) => setProfileForm({ ...profileForm, gender: value })}>
+                      <SelectTrigger className="w-full bg-secondary border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 

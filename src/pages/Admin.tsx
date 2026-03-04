@@ -7,14 +7,21 @@ import { databases, APPWRITE_CONFIG, storage } from "@/lib/appwrite";
 import { ID, Query } from "appwrite";
 import { 
   ArrowLeft, Plus, Pencil, Trash2, ShieldAlert, Save, X, Upload, Loader2, 
-  Package, CheckCircle, XCircle, Search, Grid, List, Coffee, Database, Settings
+  Package, CheckCircle, XCircle, Search, Grid, List, Coffee, Database,
+  ArrowUpDown, Eye, EyeOff, ChevronDown, ChevronUp
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { MobileNav } from "@/components/pos/MobileNav";
 import { CartDrawer } from "@/components/pos/CartDrawer";
-import { MagicCard } from "@/components/magicui/magic-card";
 import { useTheme } from "next-themes";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Product {
   $id: string;
@@ -33,6 +40,8 @@ const DEFAULT_CATEGORIES = [
   "Sandwich", "Non Veg Sandwich", "Maggie", "Non Veg Maggi",
 ];
 
+type FilterType = "all" | "available" | "unavailable";
+
 export default function Admin() {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
@@ -45,7 +54,10 @@ export default function Admin() {
   const [cartOpen, setCartOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [filterStock, setFilterStock] = useState<FilterType>("all");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("table");
+  const [sortBy, setSortBy] = useState<"name" | "price" | "category">("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme } = useTheme();
   const [isDark, setIsDark] = useState(false);
@@ -105,7 +117,6 @@ export default function Admin() {
       }) as unknown as Product[];
       setProducts(productsList);
       extractCategories(productsList);
-      extractCategories(productsList);
     } catch (error: any) {
       console.log("Fetch error:", error.message);
       setProducts([]);
@@ -146,7 +157,6 @@ export default function Admin() {
 
   const startEdit = (p: Product) => {
     setEditingProduct(p);
-    // Check if image is already a fileId (no slashes) or a full URL
     const isFileId = p.image && !p.image.includes('/storage/') && !p.image.startsWith('http');
     setForm({
       name: p.name,
@@ -154,8 +164,8 @@ export default function Admin() {
       category: p.category,
       price: p.price,
       isVeg: p.isVeg,
-      image: isFileId ? p.image : "", // Keep fileId if exists
-      imagePreview: p.image, // Show current image as preview
+      image: isFileId ? p.image : "",
+      imagePreview: p.image,
       available: p.available,
     });
     setIsNew(false);
@@ -180,20 +190,15 @@ export default function Admin() {
     if (!file) return;
     setUploading(true);
     try {
-      // Create temp URL for immediate preview
       const tempPreview = URL.createObjectURL(file);
-      
-      // Upload to Appwrite
       const uploaded = await storage.createFile(APPWRITE_CONFIG.IMAGES_BUCKET, ID.unique(), file);
       const fileId = uploaded.$id;
-      
-      // Use temp preview immediately, save fileId for database
       setForm(prev => ({ ...prev, image: fileId, imagePreview: tempPreview }));
       toast.success("Image uploaded!");
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err: any) {
       console.error("Storage upload failed:", err);
-      toast.error(err.message || "Failed to upload image. Check bucket permissions.");
+      toast.error(err.message || "Failed to upload image");
     } finally {
       setUploading(false);
     }
@@ -214,22 +219,19 @@ export default function Admin() {
         available: form.available,
       };
       
-      // Only update image if user uploaded a new one (fileId format)
-      // If image is empty, keep the original
       if (form.image) {
         const isFileId = !form.image.includes('/storage/') && !form.image.startsWith('http') && !form.image.startsWith('blob:') && !form.image.startsWith('data:');
         data.image = form.image;
       } else if (editingProduct?.image && !isNew) {
-        // Keep original image if no new image uploaded
         delete data.image;
       }
       
       if (isNew) {
         await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.PRODUCTS_COLLECTION, ID.unique(), data);
-        toast.success("Product added!");
+        toast.success("Product added successfully!");
       } else {
         await databases.updateDocument(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.PRODUCTS_COLLECTION, editingProduct.$id, data);
-        toast.success("Product updated!");
+        toast.success("Product updated successfully!");
       }
       cancelEdit();
       setTimeout(() => fetchProducts(), 100);
@@ -239,10 +241,10 @@ export default function Admin() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this product?")) return;
+    if (!confirm("Are you sure you want to delete this product?")) return;
     try {
       await databases.deleteDocument(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.PRODUCTS_COLLECTION, id);
-      toast.success("Deleted!");
+      toast.success("Product deleted!");
       fetchProducts();
     } catch {
       toast.error("Failed to delete");
@@ -253,7 +255,7 @@ export default function Admin() {
     try {
       await databases.updateDocument(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.PRODUCTS_COLLECTION, p.$id, { available: !p.available });
       fetchProducts();
-      toast.success(p.available ? "Marked as unavailable" : "Marked as available");
+      toast.success(p.available ? "Marked as out of stock" : "Marked as available");
     } catch {
       toast.error("Failed to update");
     }
@@ -266,11 +268,33 @@ export default function Admin() {
     categories: categories.length - 1,
   };
 
+  // Filter products
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name?.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = filterCategory === "All" || p.category === filterCategory;
-    return matchesSearch && matchesCategory;
+    const matchesStock = filterStock === "all" || 
+      (filterStock === "available" && p.available) || 
+      (filterStock === "unavailable" && !p.available);
+    return matchesSearch && matchesCategory && matchesStock;
   });
+
+  // Sort products
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    let comparison = 0;
+    if (sortBy === "name") comparison = a.name.localeCompare(b.name);
+    else if (sortBy === "price") comparison = a.price - b.price;
+    else if (sortBy === "category") comparison = a.category.localeCompare(b.category);
+    return sortOrder === "asc" ? comparison : -comparison;
+  });
+
+  const handleSort = (field: "name" | "price" | "category") => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortOrder("asc");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -283,7 +307,7 @@ export default function Admin() {
             <div>
               <h1 className="text-lg font-bold text-foreground">Admin Dashboard</h1>
               <p className="text-xs text-muted-foreground">
-                {dbStatus === "ready" ? `${stats.total} Products` : dbStatus === "checking" ? "Checking..." : "Setup Required"}
+                {dbStatus === "ready" ? `${stats.total} Products • ${stats.categories} Categories` : dbStatus === "checking" ? "Checking..." : "Setup Required"}
               </p>
             </div>
           </div>
@@ -309,27 +333,72 @@ export default function Admin() {
         </div>
       ) : (
       <main className="container mx-auto px-4 py-4 pb-40">
-        {/* Stats Cards */}
+        {/* Stats Cards - Clickable */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          {[
-            { label: "Total Products", value: stats.total, icon: Package, color: "from-blue-500 to-blue-600" },
-            { label: "Available", value: stats.available, icon: CheckCircle, color: "from-green-500 to-green-600" },
-            { label: "Unavailable", value: stats.unavailable, icon: XCircle, color: "from-red-500 to-red-600" },
-            { label: "Categories", value: stats.categories, icon: Coffee, color: "from-purple-500 to-purple-600" },
-          ].map((stat, i) => (
-            <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
-              <MagicCard className="p-4" gradientColor={isDark ? "#1e293b" : "#e2e8f0"}>
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center mb-3`}>
-                  <stat.icon className="w-5 h-5 text-white" />
-                </div>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-              </MagicCard>
-            </motion.div>
-          ))}
+          <motion.button 
+            onClick={() => setFilterStock("all")}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={`p-4 rounded-2xl text-left transition-all ${
+              filterStock === "all" 
+                ? "bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25" 
+                : "bg-card border border-border hover:border-primary/30"
+            }`}
+          >
+            <div className={`w-10 h-10 rounded-xl ${filterStock === "all" ? "bg-white/20" : "bg-blue-100 dark:bg-blue-900/30"} flex items-center justify-center mb-3`}>
+              <Package className={`w-5 h-5 ${filterStock === "all" ? "text-white" : "text-blue-600 dark:text-blue-400"}`} />
+            </div>
+            <p className={`text-2xl font-bold ${filterStock === "all" ? "text-white" : "text-foreground"}`}>{stats.total}</p>
+            <p className={`text-xs ${filterStock === "all" ? "text-white/80" : "text-muted-foreground"}`}>Total Products</p>
+          </motion.button>
+
+          <motion.button 
+            onClick={() => setFilterStock("available")}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={`p-4 rounded-2xl text-left transition-all ${
+              filterStock === "available" 
+                ? "bg-gradient-to-br from-green-500 to-green-600 shadow-lg shadow-green-500/25" 
+                : "bg-card border border-border hover:border-primary/30"
+            }`}
+          >
+            <div className={`w-10 h-10 rounded-xl ${filterStock === "available" ? "bg-white/20" : "bg-green-100 dark:bg-green-900/30"} flex items-center justify-center mb-3`}>
+              <CheckCircle className={`w-5 h-5 ${filterStock === "available" ? "text-white" : "text-green-600 dark:text-green-400"}`} />
+            </div>
+            <p className={`text-2xl font-bold ${filterStock === "available" ? "text-white" : "text-foreground"}`}>{stats.available}</p>
+            <p className={`text-xs ${filterStock === "available" ? "text-white/80" : "text-muted-foreground"}`}>In Stock</p>
+          </motion.button>
+
+          <motion.button 
+            onClick={() => setFilterStock("unavailable")}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={`p-4 rounded-2xl text-left transition-all ${
+              filterStock === "unavailable" 
+                ? "bg-gradient-to-br from-red-500 to-red-600 shadow-lg shadow-red-500/25" 
+                : "bg-card border border-border hover:border-primary/30"
+            }`}
+          >
+            <div className={`w-10 h-10 rounded-xl ${filterStock === "unavailable" ? "bg-white/20" : "bg-red-100 dark:bg-red-900/30"} flex items-center justify-center mb-3`}>
+              <XCircle className={`w-5 h-5 ${filterStock === "unavailable" ? "text-white" : "text-red-600 dark:text-red-400"}`} />
+            </div>
+            <p className={`text-2xl font-bold ${filterStock === "unavailable" ? "text-white" : "text-foreground"}`}>{stats.unavailable}</p>
+            <p className={`text-xs ${filterStock === "unavailable" ? "text-white/80" : "text-muted-foreground"}`}>Out of Stock</p>
+          </motion.button>
+
+          <motion.div 
+            whileHover={{ scale: 1.02 }}
+            className="p-4 rounded-2xl text-left bg-card border border-border"
+          >
+            <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-3">
+              <Coffee className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            </div>
+            <p className="text-2xl font-bold text-foreground">{stats.categories}</p>
+            <p className="text-xs text-muted-foreground">Categories</p>
+          </motion.div>
         </div>
 
-        {/* Search & Filter */}
+        {/* Filter Tabs */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -341,42 +410,126 @@ export default function Admin() {
               className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground"
-          >
-            <option value="All">All Categories</option>
-            {categories.slice(1).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <SelectTrigger className="w-40 bg-secondary border-border/50">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="All">All Categories</SelectItem>
+              {categories.slice(1).map(c => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex gap-1 bg-secondary rounded-xl p-1">
+            <button onClick={() => setViewMode("table")} className={`p-2 rounded-lg ${viewMode === "table" ? "bg-primary text-white" : "text-muted-foreground"}`}>
+              <List className="w-4 h-4" />
+            </button>
             <button onClick={() => setViewMode("grid")} className={`p-2 rounded-lg ${viewMode === "grid" ? "bg-primary text-white" : "text-muted-foreground"}`}>
               <Grid className="w-4 h-4" />
-            </button>
-            <button onClick={() => setViewMode("list")} className={`p-2 rounded-lg ${viewMode === "list" ? "bg-primary text-white" : "text-muted-foreground"}`}>
-              <List className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Products Grid/List */}
+        {/* Results count */}
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm text-muted-foreground">
+            Showing {sortedProducts.length} of {filteredProducts.length} products
+          </p>
+        </div>
+
+        {/* Products Table/Grid */}
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="h-48 rounded-xl skeleton-shimmer" />
             ))}
           </div>
-        ) : filteredProducts.length === 0 ? (
+        ) : sortedProducts.length === 0 ? (
           <div className="text-center py-12">
             <Package className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
             <p className="text-muted-foreground">No products found</p>
           </div>
-        ) : viewMode === "grid" ? (
+        ) : viewMode === "table" ? (
+          /* Table View */
+          <div className="overflow-x-auto rounded-xl border border-border bg-card">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-secondary/50">
+                  <th className="text-left p-3 text-xs font-semibold text-muted-foreground">Image</th>
+                  <th className="text-left p-3 text-xs font-semibold text-muted-foreground">
+                    <button onClick={() => handleSort("name")} className="flex items-center gap-1 hover:text-foreground">
+                      Name {sortBy === "name" && (sortOrder === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                    </button>
+                  </th>
+                  <th className="text-left p-3 text-xs font-semibold text-muted-foreground">
+                    <button onClick={() => handleSort("category")} className="flex items-center gap-1 hover:text-foreground">
+                      Category {sortBy === "category" && (sortOrder === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                    </button>
+                  </th>
+                  <th className="text-left p-3 text-xs font-semibold text-muted-foreground">
+                    <button onClick={() => handleSort("price")} className="flex items-center gap-1 hover:text-foreground">
+                      Price {sortBy === "price" && (sortOrder === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                    </button>
+                  </th>
+                  <th className="text-center p-3 text-xs font-semibold text-muted-foreground">Status</th>
+                  <th className="text-right p-3 text-xs font-semibold text-muted-foreground">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedProducts.map((p) => (
+                  <tr key={p.$id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                    <td className="p-3">
+                      <img src={p.image || "/placeholder.svg"} alt={p.name} className="w-12 h-12 rounded-lg object-cover" />
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        <div className={p.isVeg ? "w-3 h-3 rounded-full bg-green-500" : "w-3 h-3 rounded-full bg-red-500"} />
+                        <span className="font-medium text-foreground">{p.name}</span>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-secondary text-muted-foreground">
+                        {p.category}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <span className="font-bold text-foreground">₹{p.price}</span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <button
+                        onClick={() => toggleAvailability(p)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                          p.available 
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200" 
+                            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200"
+                        }`}
+                      >
+                        {p.available ? <><CheckCircle className="w-3 h-3" /> Available</> : <><XCircle className="w-3 h-3" /> Unavailable</>}
+                      </button>
+                    </td>
+                    <td className="p-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => startEdit(p)} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/10 transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDelete(p.$id)} className="w-8 h-8 rounded-lg flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          /* Grid View */
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             <AnimatePresence>
-              {filteredProducts.map((p, i) => (
-                <motion.div key={p.$id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
-                  <MagicCard className="overflow-hidden" gradientColor={isDark ? "#1e293b" : "#f1f5f9"}>
+              {sortedProducts.map((p, i) => (
+                <motion.div key={p.$id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.03 }}>
+                  <div className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
                     <div className="relative aspect-square">
                       <img src={p.image || "/placeholder.svg"} alt={p.name} className="w-full h-full object-cover" />
                       <button
@@ -406,41 +559,10 @@ export default function Admin() {
                         </div>
                       </div>
                     </div>
-                  </MagicCard>
+                  </div>
                 </motion.div>
               ))}
             </AnimatePresence>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {filteredProducts.map((p, i) => (
-              <motion.div key={p.$id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}>
-                <div className="glass-card rounded-xl p-3 flex items-center gap-3">
-                  <img src={p.image || "/placeholder.svg"} alt={p.name} className="w-14 h-14 rounded-lg object-cover" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <div className={p.isVeg ? "w-3 h-3 rounded-full bg-green-500" : "w-3 h-3 rounded-full bg-red-500"} />
-                      <p className="font-semibold text-foreground truncate">{p.name}</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{p.category}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-foreground">₹{p.price}</p>
-                    <button onClick={() => toggleAvailability(p)} className={`text-xs ${p.available ? "text-green-500" : "text-red-500"}`}>
-                      {p.available ? "Available" : "Unavailable"}
-                    </button>
-                  </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => startEdit(p)} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => handleDelete(p.$id)} className="w-8 h-8 rounded-lg flex items-center justify-center text-destructive">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
           </div>
         )}
       </main>
@@ -456,7 +578,7 @@ export default function Admin() {
           >
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-lg glass-card rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-lg bg-card border border-border rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
@@ -477,10 +599,16 @@ export default function Admin() {
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1 block">Category</label>
                     <div className="flex gap-2">
-                      <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
-                        className="flex-1 px-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground">
-                        {categories.slice(1).map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      <Select value={form.category} onValueChange={(value) => setForm({ ...form, category: value })}>
+                        <SelectTrigger className="flex-1 bg-secondary border-border/50">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.slice(1).map(c => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <input
                         type="text"
                         placeholder="New"
