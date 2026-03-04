@@ -8,7 +8,7 @@ import { ID, Query } from "appwrite";
 import { 
   ArrowLeft, Plus, Pencil, Trash2, ShieldAlert, Save, X, Upload, Loader2, 
   Package, CheckCircle, XCircle, Search, Grid, List, Coffee, Database,
-  ArrowUpDown, Eye, EyeOff, ChevronDown, ChevronUp
+  ArrowUpDown, Eye, EyeOff, ChevronDown, ChevronUp, BarChart3
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
@@ -312,6 +312,9 @@ export default function Admin() {
             </div>
           </div>
           <div className="flex gap-2">
+            <Link to="/admin/sales" className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-sm font-semibold flex items-center gap-1.5 shadow-lg shadow-purple-500/20">
+              <BarChart3 className="w-4 h-4" /> Sales Report
+            </Link>
             {dbStatus === "ready" && (
               <button onClick={startNew} className="px-4 py-2 rounded-xl cart-gradient text-white text-sm font-semibold flex items-center gap-1.5 shadow-lg shadow-orange-500/20">
                 <Plus className="w-4 h-4" /> Add Product

@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import OrderHistory from "./pages/OrderHistory";
 import Admin from "./pages/Admin";
+import SalesReport from "./pages/SalesReport";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
@@ -32,6 +33,7 @@ const App = () => (
                 <Route path="/login" element={<Login />} />
                 <Route path="/orders" element={<OrderHistory />} />
                 <Route path="/admin" element={<Admin />} />
+                <Route path="/admin/sales" element={<SalesReport />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
