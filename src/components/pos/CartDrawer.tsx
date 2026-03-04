@@ -389,7 +389,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                   placeholder="Customer Name (Optional)"
                   value={customerName} 
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border text-sm" 
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" 
                 />
               </div>
 
@@ -401,7 +401,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                   placeholder="WhatsApp Number (Required) *"
                   value={customerPhone} 
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border text-sm" 
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" 
                 />
               </div>
 
@@ -411,7 +411,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                   <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <input type="number" placeholder="Discount (₹)" value={discountInput}
                     onChange={(e) => setDiscountInput(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border text-sm" />
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
                 </div>
                 <button onClick={applyDiscount}
                   className="px-4 py-2.5 rounded-xl cart-gradient text-primary-foreground text-sm font-semibold">

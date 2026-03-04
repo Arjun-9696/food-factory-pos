@@ -1,9 +1,7 @@
-import { Search, ShoppingBag, Coffee } from "lucide-react";
+import { Search, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { UserMenu } from "./UserMenu";
 import { AnimatedThemeToggler } from "@/components/magicui/animated-theme-toggler";
-import { OrbitingCircles } from "@/components/magicui/orbiting-circles";
-import { Sun, Moon } from "lucide-react";
 
 interface POSHeaderProps {
   searchQuery: string;
@@ -21,25 +19,32 @@ export function POSHeader({ searchQuery, onSearchChange, isDark, onToggleDark, c
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           {/* Brand with OrbitingCircles */}
-          <div className="flex-shrink-0 relative">
-            <OrbitingCircles radius={30} speed={1.5} iconSize={12}>
-              <div className="w-3 h-3 rounded-full bg-orange-500" />
-              <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-              <div className="w-2 h-2 rounded-full bg-yellow-500" />
-              <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
-            </OrbitingCircles>
-            
-            <div className="relative pl-8">
-              <h1 className="text-lg md:text-xl font-extrabold text-foreground hover:animate-glow-pulse transition-all flex items-center gap-2">
-                <Coffee className="w-5 h-5 text-orange-500" />
-                Food Factory
-              </h1>
-            </div>
-            <p className="text-[10px] md:text-xs font-medium text-primary tracking-wider uppercase flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />
-              The Quality Taste
-            </p>
-          </div>
+  <div className="flex items-center">
+  <div className="flex items-center gap-2">
+    
+    {/* Logo */}
+    <img
+      src="/foodfactory.svg"
+      alt="Food Factory Logo"
+      className="w-8 h-8 object-contain"
+    />
+
+    {/* Text Section */}
+    <div className="flex flex-col">
+      <h1 className="text-2xl font-extrabold text-foreground">
+        Food Factory
+      </h1>
+
+      <p className="text-[10px] md:text-xs font-medium text-primary uppercase flex items-center justify-between w-full gap-1 ">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+        <span className="flex-1 text-center tracking-[0.33em] md:tracking-[0.15em] ">
+          THE QUALITY TASTE
+        </span>
+      </p>
+    </div>
+
+  </div>
+</div>
 
           {/* Search */}
           <div className="flex-1 max-w-md relative hidden md:block">
