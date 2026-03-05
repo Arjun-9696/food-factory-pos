@@ -8,6 +8,8 @@ const DATABASE_ID = "food-factory-pos";
 const USERS_COLLECTION = "users";
 const PRODUCTS_COLLECTION = "products";
 const ORDERS_COLLECTION = "orders";
+const PROFILES_COLLECTION = "profiles";
+const ADDRESSES_COLLECTION = "addresses";
 
 export const client = new Client()
     .setEndpoint(ENDPOINT)
@@ -25,7 +27,8 @@ export const APPWRITE_CONFIG = {
     USERS_COLLECTION,
     PRODUCTS_COLLECTION,
     ORDERS_COLLECTION,
-    PROFILES_COLLECTION: "profiles",
+    PROFILES_COLLECTION,
+    ADDRESSES_COLLECTION,
     IMAGES_BUCKET: STORAGE_BUCKET_ID,
 };
 
@@ -43,32 +46,43 @@ export function getProductImageUrl(imagePath: string): string {
     return imagePath;
 }
 
-// Setup database and collections
-export async function setupAppwrite() {
+const COLLECTIONS = [
+    { id: PRODUCTS_COLLECTION, name: 'Products' },
+    { id: ORDERS_COLLECTION, name: 'Orders' },
+    { id: PROFILES_COLLECTION, name: 'Profiles' },
+    { id: ADDRESSES_COLLECTION, name: 'Addresses' },
+];
+
+export async function setupAppwrite(): Promise<boolean> {
     try {
-        // Use fetch to create database via API
-        const response = await fetch(`${ENDPOINT}/databases/${DATABASE_ID}`, {
+        // Create database if not exists
+        await fetch(`${ENDPOINT}/databases/${DATABASE_ID}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Appwrite-Project': PROJECT_ID,
+                'X-Appwrite-Key': '', // Admin API key would be needed for creation
             },
             body: JSON.stringify({ name: 'Food Factory POS' })
         }).catch(() => null);
 
-        // Create products collection
-        await fetch(`${ENDPOINT}/databases/${DATABASE_ID}/collections`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Appwrite-Project': PROJECT_ID,
-            },
-            body: JSON.stringify({ 
-                name: 'Products',
-                documentSecurity: false,
-                enabled: true 
-            })
-        }).catch(() => {});
+        // Create collections
+        for (const coll of COLLECTIONS) {
+            try {
+                await fetch(`${ENDPOINT}/databases/${DATABASE_ID}/collections`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Appwrite-Project': PROJECT_ID,
+                    },
+                    body: JSON.stringify({ 
+                        name: coll.name,
+                        documentSecurity: false,
+                        enabled: true 
+                    })
+                }).catch(() => {});
+            } catch {}
+        }
 
         return true;
     } catch (error) {

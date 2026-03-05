@@ -115,7 +115,7 @@ export default function Profile() {
     try {
       const response = await databases.listDocuments(
         APPWRITE_CONFIG.DATABASE_ID,
-        "addresses",
+        APPWRITE_CONFIG.ADDRESSES_COLLECTION,
         [Query.equal("userId", user!.id), Query.orderDesc("isDefault")]
       );
       setAddresses(response.documents as any);
@@ -205,7 +205,7 @@ export default function Profile() {
           if (addr.isDefault) {
             await databases.updateDocument(
               APPWRITE_CONFIG.DATABASE_ID,
-              "addresses",
+              APPWRITE_CONFIG.ADDRESSES_COLLECTION,
               addr.$id,
               { isDefault: false }
             );
@@ -216,7 +216,7 @@ export default function Profile() {
       if (editingAddressId) {
         await databases.updateDocument(
           APPWRITE_CONFIG.DATABASE_ID,
-          "addresses",
+          APPWRITE_CONFIG.ADDRESSES_COLLECTION,
           editingAddressId,
           data
         );
@@ -224,7 +224,7 @@ export default function Profile() {
       } else {
         await databases.createDocument(
           APPWRITE_CONFIG.DATABASE_ID,
-          "addresses",
+          APPWRITE_CONFIG.ADDRESSES_COLLECTION,
           ID.unique(),
           data
         );
@@ -246,7 +246,7 @@ export default function Profile() {
     try {
       await databases.deleteDocument(
         APPWRITE_CONFIG.DATABASE_ID,
-        "addresses",
+        APPWRITE_CONFIG.ADDRESSES_COLLECTION,
         id
       );
       toast.success("Address deleted!");
@@ -262,7 +262,7 @@ export default function Profile() {
         if (addr.isDefault) {
           await databases.updateDocument(
             APPWRITE_CONFIG.DATABASE_ID,
-            "addresses",
+            APPWRITE_CONFIG.ADDRESSES_COLLECTION,
             addr.$id,
             { isDefault: false }
           );
@@ -270,7 +270,7 @@ export default function Profile() {
       }
       await databases.updateDocument(
         APPWRITE_CONFIG.DATABASE_ID,
-        "addresses",
+        APPWRITE_CONFIG.ADDRESSES_COLLECTION,
         address.$id,
         { isDefault: true }
       );
@@ -332,9 +332,9 @@ export default function Profile() {
             Profile
           </button>
           <button
-            onClick={() => setSearchParams({ tab: "addresses" })}
+            onClick={() => setSearchParams({ tab: APPWRITE_CONFIG.ADDRESSES_COLLECTION })}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-              activeTab === "addresses" 
+              activeTab === APPWRITE_CONFIG.ADDRESSES_COLLECTION 
                 ? "cart-gradient text-primary-foreground" 
                 : "bg-secondary text-foreground hover:bg-secondary/80"
             }`}
