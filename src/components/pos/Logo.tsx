@@ -23,7 +23,7 @@ export function Logo({ className = "", size = "md" }: LogoProps) {
         <span className={`font-extrabold text-foreground leading-none ${text}`}>
           Food Factory
         </span>
-        <span className="text-[10px] text-orange-600 dark:text-orange-400 font-medium tracking-wider uppercase">
+        <span className="text-[10px] text-muted-foreground font-medium tracking-wider uppercase">
           The Quality Taste
         </span>
       </div>

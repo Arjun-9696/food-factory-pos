@@ -15,6 +15,7 @@ import { Marquee } from "@/components/magicui/marquee";
 import { ProductAnimatedList } from "@/components/pos/ProductAnimatedList";
 import { MobileSearchResults } from "@/components/pos/MobileSearchResults";
 import { LayoutGrid, List, ArrowUpDown } from "lucide-react";
+import { getCategoryEmoji } from "@/data/categories";
 import {
   Select,
   SelectContent,
@@ -22,52 +23,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import BackgroundMedia from "@/components/ui/bg-media";
 
 const ITEMS_PER_PAGE = 8;
 
 type SortOption = "default" | "price-low" | "price-high" | "name-asc" | "name-desc";
-
-const CATEGORY_EMOJIS: Record<string, string> = {
-  "All": "🍽️",
-  "Fresh Juice": "🍊",
-  "Fresh Juices": "🍊",
-  "Fruite Milk Shake": "🥤",
-  "Milkshakes": "🥤",
-  "Milkshake": "🥤",
-  "Special Milkshake": "🧋",
-  "Food Factory Special": "🧋",
-  "Soda": "🥤",
-  "Lassi": "🥛",
-  "Smoothie": "🍹",
-  "Falooda": "🍜",
-  "Mojito": "🍃",
-  "Health Drinks": "💪",
-  "Sandwich": "🥪",
-  "Non Veg Sandwich": "🥪",
-  "Maggie": "🍜",
-  "Maggi": "🍜",
-  "Non Veg Maggi": "🍜",
-  "Cold Coffee": "☕",
-  "Burgers": "🍔",
-  "Momos": "🥟",
-  "Noodles": "🍜",
-  "Fries": "🍟",
-  "Snacks": "🍿",
-  "Egg Items": "🥚",
-  "Bakery": "🍰",
-  "Desserts": "🍨",
-  "Hot Beverages": "🍵",
-  "Juice": "🧃",
-  "Coffee": "☕",
-  "Tea": "🍵",
-  "Shake": "🥤",
-  "Milk Shake": "🥤",
-  "Ice Cream": "🍦",
-};
-
-function getCategoryEmoji(category: string): string {
-  return CATEGORY_EMOJIS[category] || "🍴";
-}
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
@@ -187,7 +147,13 @@ function POSContent() {
           onToggleDark={toggleDark}
           cartCount={totalItems}
         />
-
+ <div className="min-w-10 md:min-w-[20rem] h-[100vh] ">
+        <BackgroundMedia
+          type="video"
+          variant="dark"
+          src="https://openaicomproductionae4b.blob.core.windows.net/production-twill-01/c74791d0-75d2-48e6-acae-96d13bc97c56/paper-planes.mp4"
+        />
+      </div>
         <div className="max-w-6xl mx-auto px-4 pt-4 pb-2">
           <div className="text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-black dark:text-white">
@@ -255,8 +221,8 @@ function POSContent() {
               </SelectContent>
             </Select>
 
-            {/* View Toggle */}
-            <div className="flex items-center bg-secondary rounded-lg p-0.5 border border-border/50">
+            {/* View Toggle - hidden on mobile */}
+            <div className="hidden md:flex items-center bg-secondary rounded-lg p-0.5 border border-border/50">
               <button
                 onClick={() => setViewMode("grid")}
                 className={`p-1.5 rounded-md transition-colors ${

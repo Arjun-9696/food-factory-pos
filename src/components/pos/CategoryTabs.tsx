@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from "react";
+import { getCategoryEmoji } from "@/data/categories";
 
 interface CategoryTabsProps {
   active: string;
@@ -42,44 +43,6 @@ const categoryImages: Record<string, string> = {
   "Shake": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=120&h=120&fit=crop&q=80",
   "Milk Shake": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=120&h=120&fit=crop&q=80",
   "Ice Cream": "https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=120&h=120&fit=crop&q=80",
-};
-
-const categoryEmojis: Record<string, string> = {
-  "All": "🍽️",
-  "Fresh Juice": "🍊",
-  "Fresh Juices": "🍊",
-  "Fruite Milk Shake": "🥤",
-  "Milkshakes": "🥤",
-  "Milkshake": "🥤",
-  "Special Milkshake": "🧋",
-  "Food Factory Special": "🧋",
-  "Soda": "🥤",
-  "Lassi": "🥛",
-  "Smoothie": "🍹",
-  "Falooda": "🍜",
-  "Mojito": "🍃",
-  "Health Drinks": "💪",
-  "Sandwich": "🥪",
-  "Non Veg Sandwich": "🥪",
-  "Maggie": "🍜",
-  "Maggi": "🍜",
-  "Non Veg Maggi": "🍜",
-  "Cold Coffee": "☕",
-  "Burgers": "🍔",
-  "Momos": "🥟",
-  "Noodles": "🍜",
-  "Fries": "🍟",
-  "Snacks": "🍿",
-  "Egg Items": "🥚",
-  "Bakery": "🍰",
-  "Desserts": "🍨",
-  "Hot Beverages": "🍵",
-  "Juice": "🧃",
-  "Coffee": "☕",
-  "Tea": "🍵",
-  "Shake": "🥤",
-  "Milk Shake": "🥤",
-  "Ice Cream": "🍦",
 };
 
 export function CategoryTabs({ active, onSelect, categories = ["All"] }: CategoryTabsProps) {
@@ -193,9 +156,9 @@ export function CategoryTabs({ active, onSelect, categories = ["All"] }: Categor
                   w-4 h-4 md:w-5 md:h-5 rounded-full bg-card shadow-sm flex items-center justify-center text-[10px] md:text-xs
                   ${cat === active ? "scale-110" : ""}
                 `}
-              >
-                {categoryEmojis[cat] || "🍴"}
-              </div>
+                >
+                  {getCategoryEmoji(cat)}
+                </div>
             </div>
             <span className="text-[10px] md:text-xs font-medium whitespace-nowrap">
               {cat}

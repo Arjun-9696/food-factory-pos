@@ -1,33 +1,46 @@
 "use client"
 
-import React, { useCallback, useEffect } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import { motion, useMotionTemplate, useMotionValue } from "motion/react"
-
 import { cn } from "@/lib/utils"
 
 interface MagicCardProps {
   children?: React.ReactNode
   className?: string
   gradientSize?: number
-  gradientColor?: string
-  gradientOpacity?: number
-  gradientFrom?: string
-  gradientTo?: string
   style?: React.CSSProperties
 }
+
+const darkNeonColors = [
+  ["#00F5FF", "#FF00E5"],
+  ["#00FFA3", "#00C2FF"],
+  ["#FF4DFF", "#6A5CFF"],
+  ["#00FFF0", "#FF7A18"],
+  ["#FF2DF7", "#00DBDE"],
+  ["#00F260", "#0575E6"],
+]
+
+const lightModeColors = [
+  ["#8EC5FC", "#E0C3FC"],
+  ["#FBC2EB", "#A6C1EE"],
+  ["#FAD0C4", "#FFD1FF"],
+  ["#FFDEE9", "#B5FFFC"],
+  ["#C1FBA4", "#A0C4FF"],
+  ["#FFD6A5", "#BDB2FF"],
+]
 
 export function MagicCard({
   children,
   className,
-  gradientSize = 200,
-  gradientColor = "#262626",
-  gradientOpacity = 0.8,
-  gradientFrom = "#9E7AFF",
-  gradientTo = "#FE8BBB",
+  gradientSize = 220,
   style,
 }: MagicCardProps) {
   const mouseX = useMotionValue(-gradientSize)
   const mouseY = useMotionValue(-gradientSize)
+
+  const [gradientFrom, setGradientFrom] = useState("#00F5FF")
+  const [gradientTo, setGradientTo] = useState("#FF00E5")
+
   const reset = useCallback(() => {
     mouseX.set(-gradientSize)
     mouseY.set(-gradientSize)
@@ -42,64 +55,61 @@ export function MagicCard({
     [mouseX, mouseY]
   )
 
+  // detect theme + random color change
   useEffect(() => {
-    reset()
-  }, [reset])
+    const changeGradient = () => {
+      const isDark = document.documentElement.classList.contains("dark")
 
-  useEffect(() => {
-    const handleGlobalPointerOut = (e: PointerEvent) => {
-      if (!e.relatedTarget) {
-        reset()
-      }
+      const palette = isDark ? darkNeonColors : lightModeColors
+      const random = palette[Math.floor(Math.random() * palette.length)]
+
+      setGradientFrom(random[0])
+      setGradientTo(random[1])
     }
 
-    const handleVisibility = () => {
-      if (document.visibilityState !== "visible") {
-        reset()
-      }
-    }
+    changeGradient()
+    const interval = setInterval(changeGradient, 1200)
 
-    window.addEventListener("pointerout", handleGlobalPointerOut)
-    window.addEventListener("blur", reset)
-    document.addEventListener("visibilitychange", handleVisibility)
-
-    return () => {
-      window.removeEventListener("pointerout", handleGlobalPointerOut)
-      window.removeEventListener("blur", reset)
-      document.removeEventListener("visibilitychange", handleVisibility)
-    }
-  }, [reset])
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <div
-      className={cn("group relative rounded-[inherit]", className)}
+      className={cn("group relative rounded-xl transition-all", className)}
       onPointerMove={handlePointerMove}
       onPointerLeave={reset}
       onPointerEnter={reset}
+      style={style}
     >
+      {/* Border glow */}
       <motion.div
-        className="bg-border pointer-events-none absolute inset-0 rounded-[inherit] duration-300 group-hover:opacity-100"
+        className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
         style={{
           background: useMotionTemplate`
           radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
-          ${gradientFrom}, 
-          ${gradientTo}, 
-          var(--border) 100%
-          )
+          ${gradientFrom},
+          ${gradientTo},
+          transparent 100%)
           `,
         }}
       />
-      <div className="bg-background absolute inset-px rounded-[inherit]" />
+
+      {/* Card background */}
+      <div className="absolute inset-[1px] rounded-[inherit] bg-white dark:bg-zinc-900" />
+
+      {/* Glow layer */}
       <motion.div
-        className="pointer-events-none absolute inset-px rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        className="pointer-events-none absolute inset-[1px] rounded-[inherit] opacity-0 group-hover:opacity-80 transition-opacity duration-300"
         style={{
           background: useMotionTemplate`
-            radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px, ${gradientColor}, transparent 100%)
+          radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
+          ${gradientFrom},
+          transparent 80%)
           `,
-          opacity: gradientOpacity,
         }}
       />
-      <div className="relative">{children}</div>
+
+      <div className="relative p-[1.5px]">{children}</div>
     </div>
   )
 }

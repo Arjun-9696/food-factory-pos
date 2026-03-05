@@ -105,7 +105,7 @@ export default function Login() {
                 <Coffee className="w-8 h-8 text-white" />
               </div>
               <h1 className="text-2xl font-extrabold text-foreground">Food Factory</h1>
-              <p className="text-xs text-primary font-medium tracking-wider uppercase mt-1">The Quality Taste</p>
+              <p className="text-xs text-muted-foreground font-medium tracking-wider uppercase mt-1">The Quality Taste</p>
               <p className="text-sm text-muted-foreground mt-3">{isSignUp ? "Create your account" : "Sign in to continue"}</p>
             </div>
 
