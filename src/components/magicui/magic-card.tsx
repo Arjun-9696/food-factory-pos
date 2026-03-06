@@ -83,7 +83,7 @@ export function MagicCard({
     >
       {/* Border glow */}
       <motion.div
-        className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        className="pointer-events-none absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
         style={{
           background: useMotionTemplate`
           radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
@@ -95,11 +95,11 @@ export function MagicCard({
       />
 
       {/* Card background */}
-      <div className="absolute inset-[1px] rounded-[inherit] bg-white dark:bg-zinc-900" />
+      <div className="absolute inset-[1px] rounded-xl bg-white dark:bg-zinc-900" />
 
       {/* Glow layer */}
       <motion.div
-        className="pointer-events-none absolute inset-[1px] rounded-[inherit] opacity-0 group-hover:opacity-80 transition-opacity duration-300"
+        className="pointer-events-none absolute inset-[1px] rounded-xl opacity-0 group-hover:opacity-80 transition-opacity duration-300"
         style={{
           background: useMotionTemplate`
           radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
@@ -109,7 +109,7 @@ export function MagicCard({
         }}
       />
 
-      <div className="relative p-[1.5px]">{children}</div>
+      <div className="relative p-[1px]">{children}</div>
     </div>
   )
 }

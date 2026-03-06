@@ -134,9 +134,11 @@ export function ProductCard({ item }: ProductCardProps) {
   const cartItem = items.find(i => i.item.id === item.id)
   const qty = cartItem?.quantity ?? 0
   const [imgLoaded, setImgLoaded] = useState(false)
+  const [descExpanded, setDescExpanded] = useState(false)
   const { theme } = useTheme()
 
-  const description = generateDescription(item)
+  const description = item.description || generateDescription(item)
+  const isLongDescription = description.length > 40
 
   const handleAdd = () => {
     addItem(item)
@@ -220,12 +222,12 @@ export function ProductCard({ item }: ProductCardProps) {
 
   {/* Content */}
  <div className="p-4 relative z-10 
-  bg-transparent dark:bg-transparent
+  bg-black/5 dark:bg-transparent
   backdrop-blur-lg 
-  rounded-b-xl group-hover:rounded-b-xl 
+  rounded-b-xl group-hover:rounded-b-xl
   transition-all duration-300">
 
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1">
 
       {/* Product Name */}
       <h3 className="font-bold text-base text-foreground truncate leading-tight dark:text-white">
@@ -233,12 +235,22 @@ export function ProductCard({ item }: ProductCardProps) {
       </h3>
 
       {/* Description */}
-      <p className="text-xs text-muted-foreground line-clamp-2 dark:text-gray-400">
-        {description}
-      </p>
+        <div className="text-xs text-muted-foreground dark:text-gray-400 min-h-[32px]">
+        <span className={isLongDescription && !descExpanded ? 'line-clamp-1' : ''}>
+          {description}
+        </span>
+        {isLongDescription && (
+          <button 
+            onClick={() => setDescExpanded(!descExpanded)}
+            className={`text-orange-500 dark:text-orange-400 font-medium text-[10px] hover:underline ${descExpanded && "ml-1"}`}
+          >
+            {descExpanded ? 'Show less' : 'Show more'}
+          </button>
+        )}
+      </div>
 
       {/* Price + Add */}
-      <div className="flex items-center justify-between mt-3">
+      <div className="flex items-center justify-between mt-1">
 
         <div className="flex flex-col">
           <span className="text-xs text-muted-foreground dark:text-gray-500">

@@ -26,16 +26,16 @@ export function POSHeader({ searchQuery, onSearchChange, isDark, onToggleDark, c
     <img
       src="/foodfactory.svg"
       alt="Food Factory Logo"
-      className="w-8 h-8 object-contain"
+      className="w-[40px] h-[45px] object-contain pt-[1px]"
     />
 
     {/* Text Section */}
     <div className="flex flex-col">
-      <h1 className="text-2xl font-extrabold text-foreground">
+      <h1 className="text-2xl font-extrabold text-foreground mb-1">
         Food Factory
       </h1>
 
-      <p className="text-[10px] md:text-xs font-medium text-primary uppercase flex items-center justify-between w-full gap-1 ">
+      <p className="text-[10px] md:text-xs font-medium text-primary uppercase flex items-center justify-between w-full gap-1">
         <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
         <span className="flex-1 text-center tracking-[0.33em] md:tracking-[0.15em] ">
           THE QUALITY TASTE

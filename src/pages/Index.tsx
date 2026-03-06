@@ -147,13 +147,13 @@ function POSContent() {
           onToggleDark={toggleDark}
           cartCount={totalItems}
         />
- <div className="min-w-10 md:min-w-[20rem] h-[100vh] ">
+ {/* <div className="min-w-10 md:min-w-[20rem] h-[100vh] ">
         <BackgroundMedia
           type="video"
           variant="dark"
           src="https://openaicomproductionae4b.blob.core.windows.net/production-twill-01/c74791d0-75d2-48e6-acae-96d13bc97c56/paper-planes.mp4"
         />
-      </div>
+      </div> */}
         <div className="max-w-6xl mx-auto px-4 pt-4 pb-2">
           <div className="text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-black dark:text-white">
