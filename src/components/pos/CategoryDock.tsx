@@ -9,11 +9,12 @@ interface CategoryDockProps {
   active: string;
   onSelect: (c: string) => void;
   categories?: string[];
+  categoryEmojis?: Record<string, string>;
 }
 
 const isLongCategory = (cat: string) => cat.length > 8;
 
-export function CategoryDock({ active, onSelect, categories = ["All"] }: CategoryDockProps) {
+export function CategoryDock({ active, onSelect, categories = ["All"], categoryEmojis = {} }: CategoryDockProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
   const [isDark, setIsDark] = useState(false);
@@ -46,7 +47,7 @@ export function CategoryDock({ active, onSelect, categories = ["All"] }: Categor
     : "bg-gray-800 text-white";
 
   return (
-    <div className="md:hidden fixed bottom-16 left-0 right-0 z-40">
+    <div className="md:hidden fixed bottom-20 left-0 right-0 z-40">
       <div 
         ref={scrollRef}
         className={`flex items-center justify-start gap-2 px-2 py-2.5 overflow-x-auto scrollbar-hide ${catBg} ${borderClass} border-t border-b`}
@@ -62,8 +63,8 @@ export function CategoryDock({ active, onSelect, categories = ["All"] }: Categor
                 ${cat === active ? activeClass : inactiveClass}
               `}
             >
-              <span className="text-lg">{getCategoryEmoji(cat)}</span>
-              <span className="text-[9px] mt-0.5 font-medium truncate max-w-[90%]">
+              <span className="text-lg">{categoryEmojis[cat] || getCategoryEmoji(cat)}</span>
+              <span className="text-sm mt-0.5 font-medium truncate  max-w-[90%]">
                 {isLongCategory(cat) ? cat.slice(0, 6) + ".." : cat}
               </span>
             </motion.button>

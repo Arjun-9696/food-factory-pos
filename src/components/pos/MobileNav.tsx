@@ -44,12 +44,12 @@ export function MobileNav({ onCartClick }: MobileNavProps) {
     mainItems.splice(2, 0, { icon: Settings, label: "Admin", path: "/admin" });
   }
 
-  const dockBg = isDark ? "bg-black" : "bg-white";
-  const borderClass = isDark ? "border-gray-800" : "border-gray-200";
-  const textClass = isDark ? "text-gray-300" : "text-gray-600";
-  const activeTextClass = isDark ? "text-orange-500" : "text-orange-600";
-  const iconColor = isDark ? "text-gray-300" : "text-gray-600";
-  const activeIconColor = isDark ? "text-orange-500" : "text-orange-600";
+  const dockBg = isDark ? "bg-gray-900/95" : "bg-white/95";
+  const borderClass = isDark ? "border-gray-700/50" : "border-gray-200";
+  const textClass = isDark ? "text-gray-400" : "text-gray-500";
+  const activeTextClass = isDark ? "text-orange-400" : "text-orange-600";
+  const iconColor = isDark ? "text-gray-400" : "text-gray-500";
+  const activeIconColor = isDark ? "text-orange-400" : "text-orange-600";
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -57,39 +57,50 @@ export function MobileNav({ onCartClick }: MobileNavProps) {
   };
 
   return (
-    <div className={`fixed bottom-0 left-0 right-0 z-50 md:hidden ${dockBg} ${borderClass} border-t`}>
-      <div className="flex items-center justify-between px-4 h-16">
-        {mainItems.map((item) => (
+    <div className={`fixed bottom-0 left-0 right-0 z-50 md:hidden ${dockBg} ${borderClass} border-t backdrop-blur-xl`}>
+      <div className="flex items-end justify-between px-2 h-20 relative max-w-md mx-auto">
+
+        {mainItems.slice(0, 2).map((item) => (
           <button
             key={item.label}
             onClick={() => navigate(item.path)}
-            className={`flex flex-col items-center justify-center gap-0.5 px-3 py-2 ${isActive(item.path) ? activeTextClass : textClass} transition-colors`}
+            className={`flex flex-col items-center justify-center flex-1 gap-0.5 py-2 ${
+              isActive(item.path) ? activeTextClass : textClass
+            } transition-all duration-200`}
           >
             <item.icon className={`w-5 h-5 ${isActive(item.path) ? activeIconColor : iconColor}`} />
-            <span className="text-[10px] font-medium">{item.label}</span>
+            <span className="text-[11px] font-medium">{item.label}</span>
           </button>
         ))}
-        
-        {/* Cart Button - Center */}
-        <button
-          onClick={onCartClick}
-          className="flex flex-col items-center justify-center gap-0.5"
-        >
-          <div className="relative">
-            <div className="w-12 h-12 -mt-5 rounded-full cart-gradient flex items-center justify-center shadow-lg shadow-orange-500/30">
-              <ShoppingBag className="w-5 h-5 text-white" />
-              {totalItems > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                  {totalItems}
-                </span>
-              )}
-            </div>
-          </div>
-          <span className={`text-[10px] font-medium ${isDark ? "text-gray-300" : "text-gray-600"}`}>Cart</span>
-        </button>
 
-        {/* Empty space for symmetry */}
-        <div className="w-12" />
+        {/* Cart Button - Only visible when items in cart */}
+        {totalItems > 0 && (
+          <button
+            onClick={onCartClick}
+            className="absolute left-1/2 -translate-x-1/2 -top-5 flex flex-col items-center"
+          >
+            <div className="relative w-14 h-14 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/40 border-4 border-inherit">
+              <ShoppingBag className="w-6 h-6 text-white" />
+            </div>
+            <span className="absolute -top-1 -right-1 min-w-[20px] h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow-md">
+              {totalItems}
+            </span>
+          </button>
+        )}
+
+        {mainItems.slice(2).map((item) => (
+          <button
+            key={item.label}
+            onClick={() => navigate(item.path)}
+            className={`flex flex-col items-center justify-center flex-1 gap-0.5 py-2 ${
+              isActive(item.path) ? activeTextClass : textClass
+            } transition-all duration-200`}
+          >
+            <item.icon className={`w-5 h-5 ${isActive(item.path) ? activeIconColor : iconColor}`} />
+            <span className="text-[11px] font-medium">{item.label}</span>
+          </button>
+        ))}
+
       </div>
     </div>
   );

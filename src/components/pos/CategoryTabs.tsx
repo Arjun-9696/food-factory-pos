@@ -5,6 +5,7 @@ interface CategoryTabsProps {
   active: string;
   onSelect: (c: string) => void;
   categories?: string[];
+  categoryEmojis?: Record<string, string>;
 }
 
 const categoryImages: Record<string, string> = {
@@ -45,7 +46,7 @@ const categoryImages: Record<string, string> = {
   "Ice Cream": "https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=120&h=120&fit=crop&q=80",
 };
 
-export function CategoryTabs({ active, onSelect, categories = ["All"] }: CategoryTabsProps) {
+export function CategoryTabs({ active, onSelect, categories = ["All"], categoryEmojis = {} }: CategoryTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isHovering, setIsHovering] = useState(false);
   const scrollPosRef = useRef(0);
@@ -157,7 +158,7 @@ export function CategoryTabs({ active, onSelect, categories = ["All"] }: Categor
                   ${cat === active ? "scale-110" : ""}
                 `}
                 >
-                  {getCategoryEmoji(cat)}
+                  {categoryEmojis?.[cat] || getCategoryEmoji(cat)}
                 </div>
             </div>
             <span className="text-[10px] md:text-xs font-medium whitespace-nowrap">

@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { X, Plus, Minus, Trash2, ShoppingBag, Printer, Tag, Send, Loader2, QrCode, User, Phone } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -203,6 +204,7 @@ function saveOrderLocally(orderData: Record<string, unknown>) {
 }
 
 export function CartDrawer({ open, onClose }: CartDrawerProps) {
+  const navigate = useNavigate();
   const {
     items, updateQuantity, removeItem, clearCart,
     subtotal, gst, discount, setDiscount, grandTotal,
@@ -283,8 +285,11 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     printWindow.document.write(generateBillHTML(orderNumber, customerName, customerPhone, items, subtotal, discount, gst, grandTotal));
     printWindow.document.close();
     printWindow.focus();
-    setTimeout(() => printWindow.print(), 250);
-  }, [saveOrderToAppwrite, resetAfterOrder, orderNumber, customerName, customerPhone, items, subtotal, discount, gst, grandTotal]);
+    setTimeout(() => {
+      printWindow.print();
+      navigate("/");
+    }, 250);
+  }, [saveOrderToAppwrite, resetAfterOrder, orderNumber, customerName, customerPhone, items, subtotal, discount, gst, grandTotal, navigate]);
 
   const handleWhatsApp = useCallback(async () => {
     if (!customerPhone.trim()) { 
@@ -301,7 +306,8 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     triggerConfetti();
     resetAfterOrder();
     setSaving(false);
-  }, [customerPhone, saveOrderToAppwrite, orderNumber, customerName, items, subtotal, discount, gst, grandTotal, resetAfterOrder]);
+    navigate("/");
+  }, [customerPhone, saveOrderToAppwrite, orderNumber, customerName, items, subtotal, discount, gst, grandTotal, resetAfterOrder, navigate]);
 
   const handleQRPaid = useCallback(async () => {
     await saveOrderToAppwrite();
@@ -309,7 +315,8 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     triggerConfetti();
     resetAfterOrder();
     onClose();
-  }, [saveOrderToAppwrite, resetAfterOrder, onClose]);
+    navigate("/");
+  }, [saveOrderToAppwrite, resetAfterOrder, onClose, navigate]);
 
   if (!open) return null;
 

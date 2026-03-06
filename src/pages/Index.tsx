@@ -56,7 +56,7 @@ function POSContent() {
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { products, categories, loading } = useProducts();
+  const { products, categories, categoryEmojis, loading } = useProducts();
   const { totalItems, items: cartItems, addItem, updateQuantity } = useCart();
   
   const debouncedSearch = useDebounce(searchQuery, 300);
@@ -147,13 +147,6 @@ function POSContent() {
           onToggleDark={toggleDark}
           cartCount={totalItems}
         />
- {/* <div className="min-w-10 md:min-w-[20rem] h-[100vh] ">
-        <BackgroundMedia
-          type="video"
-          variant="dark"
-          src="https://openaicomproductionae4b.blob.core.windows.net/production-twill-01/c74791d0-75d2-48e6-acae-96d13bc97c56/paper-planes.mp4"
-        />
-      </div> */}
         <div className="max-w-6xl mx-auto px-4 pt-4 pb-2">
           <div className="text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-black dark:text-white">
@@ -188,7 +181,7 @@ function POSContent() {
             }
           `}
         >
-          <span className="text-base">{getCategoryEmoji(cat)}</span>
+          <span className="text-base">{categoryEmojis[cat] || getCategoryEmoji(cat)}</span>
           <span>{cat}</span>
         </button>
       ))}
@@ -197,7 +190,7 @@ function POSContent() {
 </div>
 
         <div className="hidden md:block xl:hidden">
-          <CategoryTabs active={activeCategory} onSelect={setActiveCategory} categories={categories} />
+          <CategoryTabs active={activeCategory} onSelect={setActiveCategory} categories={categories} categoryEmojis={categoryEmojis} />
         </div>
 
         {/* View Toggle & Sort Controls */}
@@ -321,6 +314,7 @@ function POSContent() {
               active={activeCategory} 
               onSelect={setActiveCategory} 
               categories={categories}
+              categoryEmojis={categoryEmojis}
             />
             <MobileNav onCartClick={() => setCartOpen(true)} />
           </>

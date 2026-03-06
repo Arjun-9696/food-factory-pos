@@ -117,10 +117,36 @@ export default function Admin() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryEmoji, setNewCategoryEmoji] = useState("🍴");
   const [categoryEmojis, setCategoryEmojis] = useState<Record<string, string>>(CATEGORY_EMOJI_MAP);
+  const [categoryIds, setCategoryIds] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setIsDark(theme === "dark");
   }, [theme]);
+
+  const fetchCategoriesFromDB = async () => {
+    try {
+      const response = await databases.listDocuments(
+        APPWRITE_CONFIG.DATABASE_ID,
+        APPWRITE_CONFIG.CATEGORIES_COLLECTION,
+        [Query.limit(100)]
+      );
+      
+      const emojis: Record<string, string> = { ...CATEGORY_EMOJI_MAP };
+      const ids: Record<string, string> = {};
+      
+      response.documents.forEach((doc: any) => {
+        if (doc.name) {
+          emojis[doc.name] = doc.emoji || CATEGORY_EMOJI_MAP[doc.name] || "🍴";
+          ids[doc.name] = doc.$id;
+        }
+      });
+      
+      setCategoryEmojis(emojis);
+      setCategoryIds(ids);
+    } catch (error) {
+      console.log("Using local category emojis");
+    }
+  };
 
   const [form, setForm] = useState({
     name: "", description: "", category: DEFAULT_CATEGORIES[0], price: 0,
@@ -183,6 +209,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (user && isAdmin) {
+      fetchCategoriesFromDB();
       checkDatabase().then((ready) => {
         if (ready) fetchProducts();
         else setLoading(false);
@@ -330,6 +357,18 @@ export default function Admin() {
     }
 
     try {
+      // Save to database categories collection
+      try {
+        await databases.createDocument(
+          APPWRITE_CONFIG.DATABASE_ID,
+          APPWRITE_CONFIG.CATEGORIES_COLLECTION,
+          ID.unique(),
+          { name: trimmedName, emoji: newCategoryEmoji }
+        );
+      } catch (dbError) {
+        console.log("Categories collection not available, using local only");
+      }
+
       const newCategories = [...categories, trimmedName];
       setCategories(newCategories);
       setCategoryEmojis(prev => ({ ...prev, [trimmedName]: newCategoryEmoji }));
@@ -363,6 +402,42 @@ export default function Admin() {
     }
 
     try {
+      // Save to database - create or update
+      if (categoryIds[oldName]) {
+        try {
+          await databases.updateDocument(
+            APPWRITE_CONFIG.DATABASE_ID,
+            APPWRITE_CONFIG.CATEGORIES_COLLECTION,
+            categoryIds[oldName],
+            { name: trimmedName, emoji: newCategoryEmoji }
+          );
+        } catch (e) {
+          // Try to create if update fails
+          try {
+            await databases.createDocument(
+              APPWRITE_CONFIG.DATABASE_ID,
+              APPWRITE_CONFIG.CATEGORIES_COLLECTION,
+              ID.unique(),
+              { name: trimmedName, emoji: newCategoryEmoji }
+            );
+          } catch (createErr) {
+            console.log("Could not save category to DB");
+          }
+        }
+      } else {
+        // Create new category in DB
+        try {
+          await databases.createDocument(
+            APPWRITE_CONFIG.DATABASE_ID,
+            APPWRITE_CONFIG.CATEGORIES_COLLECTION,
+            ID.unique(),
+            { name: trimmedName, emoji: newCategoryEmoji }
+          );
+        } catch (e) {
+          console.log("Could not create category in DB");
+        }
+      }
+
       // Update category in the list
       const newCategories = categories.map(c => c === oldName ? trimmedName : c);
       setCategories(newCategories);
@@ -390,6 +465,14 @@ export default function Admin() {
       setNewCategoryEmoji("🍴");
       setEditingCategory(null);
       setEditCategoryOpen(false);
+      
+      // Update category IDs if renamed
+      if (oldName !== trimmedName && categoryIds[oldName]) {
+        const newIds = { ...categoryIds };
+        newIds[trimmedName] = newIds[oldName];
+        delete newIds[oldName];
+        setCategoryIds(newIds);
+      }
       
       toast.success(`Category "${oldName}" renamed to "${trimmedName}"! (${productsToUpdate.length} products updated)`);
       fetchProducts();
@@ -755,22 +838,22 @@ export default function Admin() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Product Name *</label>
+                  <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">Product Name *</label>
                   <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground" placeholder="Enter product name" />
+                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30" placeholder="Enter product name" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">Category</label>
+                    <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">Category</label>
                     <div className="flex gap-2">
                       <Select value={form.category} onValueChange={(value) => setForm({ ...form, category: value })}>
-                        <SelectTrigger className="flex-1 bg-secondary border-border/50 text-foreground">
+                        <SelectTrigger className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-foreground dark:text-white">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
                           {categories.slice(1).map(c => (
-                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                            <SelectItem key={c} value={c} className="text-foreground dark:text-white focus:bg-orange-100 dark:focus:bg-orange-900/30">{c}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -778,7 +861,7 @@ export default function Admin() {
                         type="text"
                         placeholder="New"
                         list="new-category"
-                        className="w-24 px-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground"
+                        className="w-24 px-3 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
                         onChange={(e) => {
                           if (e.target.value && !categories.includes(e.target.value)) {
                             setForm({ ...form, category: e.target.value });
@@ -791,32 +874,32 @@ export default function Admin() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">Price (₹)</label>
+                    <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">Price (₹)</label>
                     <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
-                      className="w-full px-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground" />
+                      className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Description</label>
+                  <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">Description</label>
                   <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground resize-none h-20" placeholder="Product description" />
+                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-none h-20 focus:outline-none focus:ring-2 focus:ring-orange-500/30" placeholder="Product description" />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Product Image</label>
+                  <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">Product Image</label>
                   <div className="flex gap-2">
                     <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />
-                    <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="px-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm flex items-center gap-2">
+                    <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700">
                       {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                       {uploading ? "Uploading..." : "Choose Image"}
                     </button>
                     <input type="text" value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })}
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground" placeholder="Or paste image URL" />
+                      className="flex-1 px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500" placeholder="Or paste image URL" />
                   </div>
                   {form.imagePreview ? (
                     <div className="mt-3 relative inline-block">
-                      <img src={form.imagePreview} alt="Preview" className="w-24 h-24 rounded-lg object-cover border-2 border-border" />
+                      <img src={form.imagePreview} alt="Preview" className="w-24 h-24 rounded-lg object-cover border-2 border-gray-200 dark:border-gray-700" />
                       <button onClick={() => setForm({ ...form, image: "", imagePreview: "" })} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
                         <X className="w-3 h-3 text-white" />
                       </button>
@@ -825,11 +908,11 @@ export default function Admin() {
                 </div>
 
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-2 text-sm text-foreground">
+                  <label className="flex items-center gap-2 text-sm text-foreground dark:text-white">
                     <input type="checkbox" checked={form.isVeg} onChange={(e) => setForm({ ...form, isVeg: e.target.checked })} className="w-4 h-4 rounded" />
                     <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500" /> Veg</span>
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-foreground">
+                  <label className="flex items-center gap-2 text-sm text-foreground dark:text-white">
                     <input type="checkbox" checked={form.available} onChange={(e) => setForm({ ...form, available: e.target.checked })} className="w-4 h-4 rounded" />
                     Available
                   </label>
@@ -846,26 +929,26 @@ export default function Admin() {
 
       {/* Add Category Dialog */}
       <Dialog open={addCategoryOpen} onOpenChange={setAddCategoryOpen}>
-        <DialogContent className="sm:max-w-[450px] max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[450px] max-h-[80vh] overflow-y-auto bg-white dark:bg-gray-800">
           <DialogHeader>
-            <DialogTitle>Add New Category</DialogTitle>
+            <DialogTitle className="text-foreground dark:text-white">Add New Category</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Category Name</label>
+              <label className="text-sm font-medium text-foreground dark:text-white mb-2 block">Category Name</label>
               <input
                 type="text"
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 placeholder="Enter category name..."
-                className="w-full px-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
                 autoFocus
                 onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Select Icon</label>
-              <div className="grid grid-cols-8 gap-2 p-3 bg-secondary rounded-xl max-h-40 overflow-y-auto">
+              <label className="text-sm font-medium text-foreground dark:text-white mb-2 block">Select Icon</label>
+              <div className="grid grid-cols-8 gap-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-xl max-h-40 overflow-y-auto">
                 {AVAILABLE_EMOJIS.map((emoji) => (
                   <button
                     key={emoji}
@@ -874,7 +957,7 @@ export default function Admin() {
                     className={`w-8 h-8 text-lg rounded-lg flex items-center justify-center transition-all ${
                       newCategoryEmoji === emoji 
                         ? "bg-purple-500 text-white scale-110" 
-                        : "hover:bg-purple-100 dark:hover:bg-purple-900/30"
+                        : "hover:bg-purple-200 dark:hover:bg-purple-600 text-foreground dark:text-white"
                     }`}
                   >
                     {emoji}
@@ -886,7 +969,7 @@ export default function Admin() {
           <DialogFooter>
             <button
               onClick={() => setAddCategoryOpen(false)}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground"
+              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-foreground dark:hover:text-white"
             >
               Cancel
             </button>
@@ -902,26 +985,26 @@ export default function Admin() {
 
       {/* Edit Category Dialog */}
       <Dialog open={editCategoryOpen} onOpenChange={setEditCategoryOpen}>
-        <DialogContent className="sm:max-w-[450px] max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[450px] max-h-[80vh] overflow-y-auto bg-white dark:bg-gray-800">
           <DialogHeader>
-            <DialogTitle>Edit Category</DialogTitle>
+            <DialogTitle className="text-foreground dark:text-white">Edit Category</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Category Name</label>
+              <label className="text-sm font-medium text-foreground dark:text-white mb-2 block">Category Name</label>
               <input
                 type="text"
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 placeholder="Enter category name..."
-                className="w-full px-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
                 autoFocus
                 onKeyDown={(e) => e.key === "Enter" && handleEditCategory()}
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Select Icon</label>
-              <div className="grid grid-cols-8 gap-2 p-3 bg-secondary rounded-xl max-h-40 overflow-y-auto">
+              <label className="text-sm font-medium text-foreground dark:text-white mb-2 block">Select Icon</label>
+              <div className="grid grid-cols-8 gap-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-xl max-h-40 overflow-y-auto">
                 {AVAILABLE_EMOJIS.map((emoji) => (
                   <button
                     key={emoji}
@@ -930,7 +1013,7 @@ export default function Admin() {
                     className={`w-8 h-8 text-lg rounded-lg flex items-center justify-center transition-all ${
                       newCategoryEmoji === emoji 
                         ? "bg-purple-500 text-white scale-110" 
-                        : "hover:bg-purple-100 dark:hover:bg-purple-900/30"
+                        : "hover:bg-purple-200 dark:hover:bg-purple-600 text-foreground dark:text-white"
                     }`}
                   >
                     {emoji}
@@ -939,7 +1022,7 @@ export default function Admin() {
               </div>
             </div>
             <div className="pt-2">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 This will rename the category and update all {products.filter(p => p.category === editingCategory?.name).length} products with this category.
               </p>
             </div>
@@ -947,7 +1030,7 @@ export default function Admin() {
           <DialogFooter>
             <button
               onClick={() => setEditCategoryOpen(false)}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground"
+              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-foreground dark:hover:text-white"
             >
               Cancel
             </button>
@@ -963,9 +1046,9 @@ export default function Admin() {
 
       {/* Select Category to Edit Dialog */}
       <Dialog open={selectCategoryOpen} onOpenChange={setSelectCategoryOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[400px] bg-white dark:bg-gray-800">
           <DialogHeader>
-            <DialogTitle>Select Category to Edit</DialogTitle>
+            <DialogTitle className="text-foreground dark:text-white">Select Category to Edit</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-2 max-h-[300px] overflow-y-auto">
             {categories.slice(1).map((cat) => (
@@ -975,11 +1058,11 @@ export default function Admin() {
                   setSelectCategoryOpen(false);
                   setTimeout(() => openEditCategory(cat), 100);
                 }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-secondary hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-purple-200 dark:hover:bg-purple-600 transition-colors text-left"
               >
                 <span className="text-xl">{categoryEmojis[cat] || "🍴"}</span>
-                <span className="font-medium text-foreground">{cat}</span>
-                <span className="ml-auto text-xs text-muted-foreground">
+                <span className="font-medium text-foreground dark:text-white">{cat}</span>
+                <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
                   {products.filter(p => p.category === cat).length} products
                 </span>
               </button>

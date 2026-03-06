@@ -10,6 +10,7 @@ const PRODUCTS_COLLECTION = "products";
 const ORDERS_COLLECTION = "orders";
 const PROFILES_COLLECTION = "profiles";
 const ADDRESSES_COLLECTION = "addresses";
+const CATEGORIES_COLLECTION = "categories";
 
 export const client = new Client()
     .setEndpoint(ENDPOINT)
@@ -29,6 +30,7 @@ export const APPWRITE_CONFIG = {
     ORDERS_COLLECTION,
     PROFILES_COLLECTION,
     ADDRESSES_COLLECTION,
+    CATEGORIES_COLLECTION,
     IMAGES_BUCKET: STORAGE_BUCKET_ID,
 };
 
