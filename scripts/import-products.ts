@@ -28,10 +28,10 @@ const CATEGORY_IMAGES: Record<string, string> = {
 
 const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1546173159-315724a31696?w=400&h=300&fit=crop";
 
-const DIETARY_MAP: Record<string, boolean> = {
-  "Veg": true,
-  "Non veg": false,
-  "Egg": false,
+const DIETARY_MAP: Record<string, "veg" | "egg" | "nonveg"> = {
+  "Veg": "veg",
+  "Non veg": "nonveg",
+  "Egg": "egg",
 };
 
 function parseCSV(content: string): any[] {
@@ -122,7 +122,7 @@ async function importProducts() {
     const category = p.category || "";
     const price = parseFloat(p.itemprice || p.price || "0");
     const dietary = p.dietarytag || p.dietary || "Veg";
-    const isVeg = DIETARY_MAP[dietary] ?? true;
+    const foodType = DIETARY_MAP[dietary] ?? "veg";
 
     if (!name || !category) continue;
 
@@ -140,7 +140,7 @@ async function importProducts() {
         description: "",
         category: category.trim(),
         price: price,
-        isVeg: isVeg,
+        foodType: foodType,
         image: image,
         available: true,
       });

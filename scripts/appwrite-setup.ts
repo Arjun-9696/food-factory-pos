@@ -95,7 +95,7 @@ async function setup() {
         try { await databases.createStringAttribute(DATABASE_ID, "products", "description", 1000, true); } catch (e: any) {}
         try { await databases.createStringAttribute(DATABASE_ID, "products", "category", 256, false); } catch (e: any) {}
         try { await databases.createIntegerAttribute(DATABASE_ID, "products", "price", false); } catch (e: any) {}
-        try { await databases.createBooleanAttribute(DATABASE_ID, "products", "isVeg", false); } catch (e: any) {}
+        try { await databases.createStringAttribute(DATABASE_ID, "products", "foodType", 20, false, "veg", ["veg", "egg", "nonveg"]); } catch (e: any) {}
         try { await databases.createStringAttribute(DATABASE_ID, "products", "image", 10000, true); } catch (e: any) {}
         try { await databases.createBooleanAttribute(DATABASE_ID, "products", "available", false); } catch (e: any) {}
         console.log("✅ Product attributes added");

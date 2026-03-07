@@ -61,7 +61,7 @@ model Product {
   description String?
   category    String
   price       Float
-  isVeg       Boolean     @default(true) @map("is_veg")
+  foodType    String      @default("veg") @map("food_type")
   image       String?
   available   Boolean     @default(true)
   createdAt   DateTime    @default(now()) @map("created_at")

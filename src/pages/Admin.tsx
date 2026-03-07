@@ -37,7 +37,7 @@ interface Product {
   description: string;
   category: string;
   price: number;
-  isVeg: boolean;
+  foodType: "veg" | "egg" | "nonveg";
   image: string;
   available: boolean;
 }
@@ -148,9 +148,18 @@ export default function Admin() {
     }
   };
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    name: string;
+    description: string;
+    category: string;
+    price: number;
+    foodType: "veg" | "egg" | "nonveg";
+    image: string;
+    imagePreview: string;
+    available: boolean;
+  }>({
     name: "", description: "", category: DEFAULT_CATEGORIES[0], price: 0,
-    isVeg: true, image: "", imagePreview: "", available: true,
+    foodType: "veg", image: "", imagePreview: "", available: true,
   });
 
   const checkDatabase = async () => {
@@ -246,7 +255,7 @@ export default function Admin() {
       description: p.description,
       category: p.category,
       price: p.price,
-      isVeg: p.isVeg,
+      foodType: p.foodType || "veg",
       image: isFileId ? p.image : "",
       imagePreview: p.image,
       available: p.available,
@@ -258,14 +267,14 @@ export default function Admin() {
     setEditingProduct({} as Product);
     setForm({
       name: "", description: "", category: categories[1] || DEFAULT_CATEGORIES[0], price: 0,
-      isVeg: true, image: "", imagePreview: "", available: true,
+      foodType: "veg", image: "", imagePreview: "", available: true,
     });
     setIsNew(true);
   };
 
   const cancelEdit = () => {
     setEditingProduct(null);
-    setForm({ name: "", description: "", category: categories[1] || DEFAULT_CATEGORIES[0], price: 0, isVeg: true, image: "", imagePreview: "", available: true });
+    setForm({ name: "", description: "", category: categories[1] || DEFAULT_CATEGORIES[0], price: 0, foodType: "veg", image: "", imagePreview: "", available: true });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -298,7 +307,7 @@ export default function Admin() {
         description: form.description || "",
         category: form.category,
         price: Number(form.price) || 0,
-        isVeg: form.isVeg,
+        foodType: form.foodType,
         available: form.available,
       };
       
@@ -732,7 +741,9 @@ export default function Admin() {
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-2">
-                        <div className={p.isVeg ? "w-3 h-3 rounded-full bg-green-500" : "w-3 h-3 rounded-full bg-red-500"} />
+                        <div className={`w-3 h-3 rounded-full ${
+                          p.foodType === "veg" ? "bg-green-500" : p.foodType === "egg" ? "bg-yellow-500" : "bg-red-500"
+                        }`} />
                         <span className="font-medium text-foreground">{p.name}</span>
                       </div>
                     </td>
@@ -791,7 +802,9 @@ export default function Admin() {
                     </div>
                     <div className="p-3">
                       <div className="flex items-center gap-2 mb-1">
-                        <div className={p.isVeg ? "w-3 h-3 rounded-full bg-green-500" : "w-3 h-3 rounded-full bg-red-500"} />
+                        <div className={`w-3 h-3 rounded-full ${
+                          p.foodType === "veg" ? "bg-green-500" : p.foodType === "egg" ? "bg-yellow-500" : "bg-red-500"
+                        }`} />
                         <p className="font-semibold text-sm text-foreground truncate">{p.name}</p>
                       </div>
                       <p className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit mb-2 ${getCategoryColor(p.category)}`}>{p.category}</p>
@@ -908,9 +921,35 @@ export default function Admin() {
                 </div>
 
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-2 text-sm text-foreground dark:text-white">
-                    <input type="checkbox" checked={form.isVeg} onChange={(e) => setForm({ ...form, isVeg: e.target.checked })} className="w-4 h-4 rounded" />
+                  <label className="flex items-center gap-2 text-sm text-foreground dark:text-white cursor-pointer">
+                    <input
+                      type="radio"
+                      name="foodType"
+                      checked={form.foodType === "veg"}
+                      onChange={() => setForm({ ...form, foodType: "veg" })}
+                      className="w-4 h-4"
+                    />
                     <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500" /> Veg</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-foreground dark:text-white cursor-pointer">
+                    <input
+                      type="radio"
+                      name="foodType"
+                      checked={form.foodType === "egg"}
+                      onChange={() => setForm({ ...form, foodType: "egg" })}
+                      className="w-4 h-4"
+                    />
+                    <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500" /> Egg</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-foreground dark:text-white cursor-pointer">
+                    <input
+                      type="radio"
+                      name="foodType"
+                      checked={form.foodType === "nonveg"}
+                      onChange={() => setForm({ ...form, foodType: "nonveg" })}
+                      className="w-4 h-4"
+                    />
+                    <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500" /> Non-Veg</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm text-foreground dark:text-white">
                     <input type="checkbox" checked={form.available} onChange={(e) => setForm({ ...form, available: e.target.checked })} className="w-4 h-4 rounded" />

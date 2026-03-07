@@ -94,7 +94,7 @@ export function useProducts() {
         description: doc.description || "",
         category: doc.category,
         price: Number(doc.price),
-        isVeg: doc.isVeg,
+        foodType: doc.foodType || (doc.isVeg === true ? "veg" : doc.isVeg === false ? "nonveg" : "veg"),
         image: getImageUrl(doc.image),
         available: doc.available,
       }));

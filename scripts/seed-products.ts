@@ -27,7 +27,7 @@ interface Product {
   description?: string;
   category: string;
   price: number;
-  isVeg: boolean;
+  foodType: "veg" | "egg" | "nonveg";
   image?: string;
   available: boolean;
 }
@@ -45,10 +45,12 @@ function parseCSV(): Promise<Product[]> {
           name: row["Item name"].trim(),
           description: row["Item description"] || "",
           category: row["Category"] || "General",
-          price: Math.round(Number(row["Item price"])), // integer
-          isVeg: row["Dietary Tag (veg/non veg/egg)"]
-            ?.toLowerCase()
-            .includes("veg") ?? false,
+          price: Math.round(Number(row["Item price"])),
+          foodType: row["Dietary Tag (veg/non veg/egg)"]?.toLowerCase().includes("egg")
+            ? "egg"
+            : row["Dietary Tag (veg/non veg/egg)"]?.toLowerCase().includes("veg")
+              ? "veg"
+              : "nonveg",
           image: "",
           available: true,
         });

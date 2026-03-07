@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "npx tsx scripts/seed-products.ts",
-    "setup:db": "npx tsx scripts/appwrite-setup.ts"
+    "setup:db": "npx tsx scripts/appwrite-setup.ts",
+    "add:foodType": "npx tsx scripts/add-food-type.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
