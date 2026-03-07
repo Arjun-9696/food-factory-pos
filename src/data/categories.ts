@@ -25,7 +25,7 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
   { name: "Noodles", emoji: "🍜" },
   { name: "Fries", emoji: "🍟" },
   { name: "Snacks", emoji: "🍿" },
-  { name: "Egg Items", emoji: "🥚" },
+  { name: "Omelettes", emoji: "🥚" },
   { name: "Bakery", emoji: "🍰" },
   { name: "Desserts", emoji: "🍨" },
   { name: "Hot Beverages", emoji: "🍵" },
