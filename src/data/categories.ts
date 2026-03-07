@@ -36,6 +36,9 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
   { name: "Milk Shake", emoji: "🥤" },
   { name: "Ice Cream", emoji: "🍦" },
   { name: "Fresh Juices", emoji: "🍊" },
+  { name: "Rolls", emoji: "🌯" },
+{ name: "Shawarma", emoji: "🥙" },
+{ name: "Burgers", emoji: "🍔" },
 ];
 
 export const CATEGORY_EMOJI_MAP: Record<string, string> = DEFAULT_CATEGORIES.reduce((acc, cat) => {
