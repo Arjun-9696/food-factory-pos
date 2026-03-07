@@ -54,7 +54,7 @@ export function POSHeader({ searchQuery, onSearchChange, isDark, onToggleDark, c
               placeholder="Search menu..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-secondary/80 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-secondary/80 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             />
           </div>
 
@@ -62,7 +62,7 @@ export function POSHeader({ searchQuery, onSearchChange, isDark, onToggleDark, c
           <div className="flex items-center gap-2">
             {/* Animated Theme Toggle with continuous spin */}
             <AnimatedThemeToggler
-              className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/80 transition-all hover:scale-105"
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-foreground hover:bg-secondary/80 transition-all hover:scale-105"
             />
 
             {/* User Menu */}
@@ -78,7 +78,7 @@ export function POSHeader({ searchQuery, onSearchChange, isDark, onToggleDark, c
             placeholder="Search menu..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-secondary/80 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-secondary/80 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           />
         </div>
       </div>

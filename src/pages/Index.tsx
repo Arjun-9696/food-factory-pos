@@ -74,17 +74,22 @@ function POSContent() {
 
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);
-    if (debouncedSearch && activeCategory !== "All") {
-      setActiveCategory("All");
+  }, [activeCategory]);
+
+  const handleCategorySelect = (category: string) => {
+    setActiveCategory(category);
+    if (searchQuery) {
+      setSearchQuery("");
     }
-  }, [activeCategory, debouncedSearch]);
+  };
 
   const filtered = useMemo(() => {
     const searchLower = debouncedSearch.toLowerCase().trim();
     let filteredProducts = products.filter((item) => {
-      const matchesCategory = activeCategory === "All" || item.category === activeCategory;
+      const isSearching = !!searchLower;
+      const matchesCategory = !isSearching && (activeCategory === "All" || item.category === activeCategory);
       const matchesSearch = !searchLower || item.name.toLowerCase().includes(searchLower);
-      return matchesCategory && matchesSearch;
+      return matchesSearch && (isSearching || matchesCategory);
     });
 
     // Apply sorting
@@ -149,6 +154,21 @@ function POSContent() {
           onToggleDark={toggleDark}
           cartCount={totalItems}
         />
+        
+        {/* Mobile Search Results - positioned below header */}
+        {isMobile && searchQuery.trim() && (
+          <div className="relative">
+            <MobileSearchResults
+              query={searchQuery}
+              products={products}
+              cartItems={cartItems}
+              onAddToCart={addItem}
+              onUpdateQuantity={updateQuantity}
+              onClose={() => setSearchQuery("")}
+            />
+          </div>
+        )}
+
         <div className="max-w-6xl mx-auto px-4 pt-4 pb-2">
           <div className="text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-black dark:text-white">
@@ -171,7 +191,7 @@ function POSContent() {
       {categories.map((cat) => (
         <button
           key={cat}
-          onClick={() => setActiveCategory(cat)}
+          onClick={() => handleCategorySelect(cat)}
           className={`
             flex-shrink-0
             mx-2 px-5 py-2.5 rounded-full text-sm font-semibold
@@ -192,7 +212,12 @@ function POSContent() {
 </div>
 
         <div className="hidden md:block xl:hidden">
-          <CategoryTabs active={activeCategory} onSelect={setActiveCategory} categories={categories} categoryEmojis={categoryEmojis} />
+          <CategoryTabs 
+            active={activeCategory} 
+            onSelect={handleCategorySelect}
+            categories={categories} 
+            categoryEmojis={categoryEmojis} 
+          />
         </div>
 
         {/* View Toggle & Sort Controls */}
@@ -203,12 +228,12 @@ function POSContent() {
           <div className="flex items-center gap-2">
             {/* Sort Dropdown */}
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-              <SelectTrigger className="w-44 bg-secondary border-border/50">
-                <ArrowUpDown className="w-4 h-4 mr-2" />
+              <SelectTrigger className="w-44 bg-secondary border-border/50 text-muted-foreground dark:text-gray-400 ">
+                <ArrowUpDown className="w-4 h-4 mr-2 dark:text-gray-400 " />
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">Default</SelectItem>
+              <SelectContent >
+                <SelectItem value="default" >Default</SelectItem>
                 <SelectItem value="price-low">Price: Low to High</SelectItem>
                 <SelectItem value="price-high">Price: High to Low</SelectItem>
                 <SelectItem value="name-asc">Name: A-Z</SelectItem>
@@ -257,16 +282,6 @@ function POSContent() {
               <p className="text-sm mt-1">Try a different search or category</p>
             </div>
           ) : isMobile ? (
-            searchQuery.trim() ? (
-              <MobileSearchResults
-                query={searchQuery}
-                products={products}
-                cartItems={cartItems}
-                onAddToCart={addItem}
-                onUpdateQuantity={updateQuantity}
-                onClose={() => setSearchQuery("")}
-              />
-            ) : (
               <>
                 <div className="grid grid-cols-2 gap-3">
                   {visibleProducts.map((item) => (
@@ -290,8 +305,7 @@ function POSContent() {
                   </p>
                 )}
               </>
-            )
-          ) : viewMode === "list" ? (
+            ) : viewMode === "list" ? (
             <ProductAnimatedList
               products={filtered}
               onAddToCart={addItem}
@@ -332,7 +346,7 @@ function POSContent() {
           <>
             <CategoryDock 
               active={activeCategory} 
-              onSelect={setActiveCategory} 
+              onSelect={handleCategorySelect}
               categories={categories}
               categoryEmojis={categoryEmojis}
             />

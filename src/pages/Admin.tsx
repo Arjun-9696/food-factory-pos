@@ -664,7 +664,7 @@ export default function Admin() {
               placeholder="Search products..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             />
           </div>
           <Select value={filterCategory} onValueChange={setFilterCategory}>
@@ -845,7 +845,7 @@ export default function Admin() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-foreground">{isNew ? "Add Product" : "Edit Product"}</h2>
                 <button onClick={cancelEdit} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4 text-muted-foreground dark:text-gray-400" />
                 </button>
               </div>
 
@@ -853,7 +853,7 @@ export default function Admin() {
                 <div>
                   <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">Product Name *</label>
                   <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30" placeholder="Enter product name" />
+                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/40" placeholder="Enter product name" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -889,14 +889,14 @@ export default function Admin() {
                   <div>
                     <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">Price (₹)</label>
                     <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
-                      className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                      className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/40" />
                   </div>
                 </div>
 
                 <div>
                   <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">Description</label>
                   <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-none h-20 focus:outline-none focus:ring-2 focus:ring-orange-500/30" placeholder="Product description" />
+                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-none h-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/40" placeholder="Product description" />
                 </div>
 
                 <div>
@@ -980,7 +980,7 @@ export default function Admin() {
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 placeholder="Enter category name..."
-                className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40"
                 autoFocus
                 onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
               />
@@ -1036,7 +1036,7 @@ export default function Admin() {
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 placeholder="Enter category name..."
-                className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-foreground dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40"
                 autoFocus
                 onKeyDown={(e) => e.key === "Enter" && handleEditCategory()}
               />

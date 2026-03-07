@@ -448,7 +448,7 @@ export default function Profile() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold text-foreground">{editingAddressId ? "Edit Address" : "Add New Address"}</h3>
                   <button onClick={resetAddressForm} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center text-foreground">
-                    <X className="w-4 h-4" />
+                    <X className="w-4 h-4 text-muted-foreground dark:text-gray-400" />
                   </button>
                 </div>
 

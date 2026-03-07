@@ -333,7 +333,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
             <span className="text-xs bg-secondary px-2 py-0.5 rounded-full text-foreground">{totalItems} items</span>
           </div>
           <button onClick={onClose} className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center">
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 dark:text-gray-400 text-muted-foreground" />
           </button>
         </div>
 
@@ -367,7 +367,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                   <span className="w-6 text-center text-sm font-bold text-foreground">{ci.quantity}</span>
                   <button onClick={() => updateQuantity(ci.item.id, ci.quantity + 1)}
                     className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center">
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-3.5 h-3.5 dark:text-gray-400" />
                   </button>
                 </div>
                 <div className="text-right min-w-[50px] flex-shrink-0">
@@ -396,7 +396,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                   placeholder="Customer Name (Optional)"
                   value={customerName} 
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" 
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" 
                 />
               </div>
 
@@ -408,7 +408,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                   placeholder="WhatsApp Number (Required) *"
                   value={customerPhone} 
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" 
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" 
                 />
               </div>
 
@@ -418,7 +418,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                   <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <input type="number" placeholder="Discount (₹)" value={discountInput}
                     onChange={(e) => setDiscountInput(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
                 </div>
                 <button onClick={applyDiscount}
                   className="px-4 py-2.5 rounded-xl cart-gradient text-primary-foreground text-sm font-semibold">

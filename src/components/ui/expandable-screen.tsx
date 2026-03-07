@@ -105,7 +105,7 @@ function PaymentExpandableContent({
               onClick={onClose}
               className="absolute top-4 right-4 z-10 w-9 h-9 rounded-xl bg-secondary/80 backdrop-blur flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-all hover:scale-105 active:scale-95"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4 text-muted-foreground dark:text-gray-400" />
             </button>
 
             {/* Scrollable content */}

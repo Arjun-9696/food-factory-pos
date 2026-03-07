@@ -43,7 +43,7 @@ export function UserMenu({ isAdmin }: UserMenuProps) {
     return (
       <Link
         to="/login"
-        className="px-3 py-1.5 rounded-lg cart-gradient text-primary-foreground text-sm font-semibold flex items-center gap-1.5"
+        className="px-3 py-3 md:py-[11px] rounded-xl cart-gradient text-primary-foreground text-sm font-semibold flex items-center gap-1.5"
       >
         <User className="w-4 h-4" />
         <span className="hidden md:inline">Sign In</span>
@@ -57,7 +57,7 @@ export function UserMenu({ isAdmin }: UserMenuProps) {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg bg-secondary/80 hover:bg-secondary transition-colors"
+        className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg  hover:bg-secondary transition-colors"
       >
         <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-xs">
           {userInitial}
