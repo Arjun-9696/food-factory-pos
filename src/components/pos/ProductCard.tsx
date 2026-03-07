@@ -4,13 +4,15 @@ import { Plus, Minus } from "lucide-react"
 import { type MenuItem } from "@/data/menu"
 import { useCart } from "@/context/CartContext"
 import { toast } from "sonner"
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useTheme } from "next-themes"
 import { MagicCard } from "@/components/magicui/magic-card"
 import { Lens } from "../ui/lens"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface ProductCardProps {
   item: MenuItem
+  onAddPosition?: (position: { x: number; y: number }) => void
 }
 
 const categoryColors: Record<string, string> = {
@@ -129,18 +131,23 @@ const generateDescription = (item: MenuItem): string => {
   return categoryDescriptions[item.category] || "Fresh & Delicious - Quality ingredients";
 }
 
-export function ProductCard({ item }: ProductCardProps) {
+export function ProductCard({ item, onAddPosition }: ProductCardProps) {
   const { items, addItem, updateQuantity } = useCart()
   const cartItem = items.find(i => i.item.id === item.id)
   const qty = cartItem?.quantity ?? 0
   const [imgLoaded, setImgLoaded] = useState(false)
   const [descExpanded, setDescExpanded] = useState(false)
   const { theme } = useTheme()
+  const addButtonRef = useRef<HTMLButtonElement>(null)
 
   const description = item.description || generateDescription(item)
   const isLongDescription = description.length > 40
 
-  const handleAdd = () => {
+  const handleAdd = (e?: React.MouseEvent) => {
+    if (e && onAddPosition) {
+      const rect = (e.target as HTMLElement).getBoundingClientRect()
+      onAddPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+    }
     addItem(item)
     toast.success(`${item.name} added to cart!`, { 
       duration: 2000,
@@ -250,63 +257,84 @@ export function ProductCard({ item }: ProductCardProps) {
       </div>
 
       {/* Price + Add */}
-      <div className="flex items-center justify-between mt-1">
+      <div className="flex items-center justify-between mt-1 ">
 
         <div className="flex flex-col">
-          <span className="text-xs text-muted-foreground dark:text-gray-500">
-            Price
-          </span>
-          <span className="text-xl font-extrabold text-orange-600 dark:text-orange-400">
-            ₹{item.price}
+         
+          <span className="text-xl md:text-2xl font-extrabold text-orange-600 dark:text-orange-400">
+            ₹ {item.price}
           </span>
         </div>
 
-        {qty === 0 ? (
-          <button
-            onClick={handleAdd}
-            className="px-5 py-2.5 rounded-xl text-sm font-bold 
-            bg-gradient-to-r from-orange-500 via-orange-500 to-amber-500 
-            text-white shadow-lg shadow-orange-500/30 
-            hover:shadow-orange-500/50 hover:scale-105 
-            active:scale-95 transition-all duration-200"
-          >
-            ADD
-          </button>
-        ) : (
-          <div className="flex items-center gap-1 bg-orange-50 dark:bg-orange-950/40 rounded-xl p-1.5 shadow-md">
-            <button
-              onClick={() => updateQuantity(item.id, qty - 1)}
-              className="w-8 h-8 rounded-lg flex items-center justify-center 
-              bg-red-500 text-white font-bold text-sm 
-              hover:bg-red-600 transition-colors shadow-md"
+        <AnimatePresence mode="popLayout">
+          {qty === 0 ? (
+            <motion.button
+              key="add"
+              layoutId={`add-${item.id}`}
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.5, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleAdd}
+              className="relative px-4 md:px-6 py-1 md:py-[9px] rounded-full text-sm font-bold 
+              bg-gradient-to-r from-orange-500 via-orange-500 to-amber-500 
+              text-white shadow-lg shadow-orange-500/30 
+              hover:shadow-orange-500/50 overflow-hidden group"
             >
-              <Minus className="w-3.5 h-3.5" />
-            </button>
-
-            <span className="text-sm font-bold text-foreground dark:text-white w-6 text-center">
-              {qty}
-            </span>
-
-            <button
-              onClick={() => {
-                updateQuantity(item.id, qty + 1)
-                toast.success(`+1 ${item.name}`, {
-                  duration: 1000,
-                  style: {
-                    background: "#fff",
-                    border: "2px solid #ff6b35",
-                    boxShadow: "0 0 15px rgba(255, 107, 53, 0.25)",
-                  },
-                })
-              }}
-              className="w-8 h-8 rounded-lg flex items-center justify-center 
-              bg-green-500 text-white font-bold text-sm 
-              hover:bg-green-600 transition-colors shadow-md"
+              <span className="relative z-10">ADD</span>
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+            </motion.button>
+          ) : (
+            <motion.div
+              key="counter"
+              layoutId={`add-${item.id}`}
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.5, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              className="flex items-center gap-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md 
+              rounded-full  shadow-lg border border-white/20"
             >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+              <motion.button
+                whileTap={{ scale: 0.85 }}
+                onClick={() => updateQuantity(item.id, qty - 1)}
+                className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center 
+                bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-sm 
+                hover:bg-gray-200 dark:hover:bg-gray-600 transition-all shadow-sm"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </motion.button>
+
+              <motion.span
+                layout
+                className="text-sm font-bold text-orange-600 dark:text-orange-400 w-4 md:w-7 text-center"
+              >
+                {qty}
+              </motion.span>
+
+              <motion.button
+                whileTap={{ scale: 0.85 }}
+                onClick={() => {
+                  updateQuantity(item.id, qty + 1)
+                  toast.success(`+1 ${item.name}`, {
+                    duration: 1000,
+                    style: {
+                      background: "#fff",
+                      border: "2px solid #ff6b35",
+                      boxShadow: "0 0 15px rgba(255, 107, 53, 0.25)",
+                    },
+                  })
+                }}
+                className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center 
+                bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-sm 
+                hover:bg-gray-200 dark:hover:bg-gray-600 transition-all shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   </div>

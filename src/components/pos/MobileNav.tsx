@@ -76,6 +76,7 @@ export function MobileNav({ onCartClick }: MobileNavProps) {
         {/* Cart Button - Only visible when items in cart */}
         {totalItems > 0 && (
           <button
+            data-mobile-cart
             onClick={onCartClick}
             className="absolute left-1/2 -translate-x-1/2 -top-5 flex flex-col items-center"
           >

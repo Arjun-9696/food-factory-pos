@@ -14,6 +14,7 @@ import { Highlighter } from "@/components/magicui/highlighter";
 import { Marquee } from "@/components/magicui/marquee";
 import { ProductAnimatedList } from "@/components/pos/ProductAnimatedList";
 import { MobileSearchResults } from "@/components/pos/MobileSearchResults";
+import { FlyToCart, useFlyToCart } from "@/components/pos/FlyToCart";
 import { LayoutGrid, List, ArrowUpDown } from "lucide-react";
 import { getCategoryEmoji } from "@/data/categories";
 import {
@@ -58,6 +59,7 @@ function POSContent() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { products, categories, categoryEmojis, loading } = useProducts();
   const { totalItems, items: cartItems, addItem, updateQuantity } = useCart();
+  const { flyingItems, triggerFlyToCart, removeFlyingItem } = useFlyToCart();
   
   const debouncedSearch = useDebounce(searchQuery, 300);
 
@@ -268,7 +270,11 @@ function POSContent() {
               <>
                 <div className="grid grid-cols-2 gap-3">
                   {visibleProducts.map((item) => (
-                    <ProductCard key={item.id} item={item} />
+                    <ProductCard 
+                      key={item.id} 
+                      item={item}
+                      onAddPosition={(pos) => triggerFlyToCart(pos, item.foodType === "veg" ? "#22c55e" : item.foodType === "egg" ? "#eab308" : "#ef4444")} 
+                    />
                   ))}
                 </div>
                 {loadingMore && (
@@ -296,17 +302,31 @@ function POSContent() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
               {filtered.map((item, idx) => (
                 <div key={item.id} style={{ animationDelay: `${idx * 30}ms` }}>
-                  <ProductCard item={item} />
+                  <ProductCard 
+                    item={item}
+                    onAddPosition={(pos) => triggerFlyToCart(pos, item.foodType === "veg" ? "#22c55e" : item.foodType === "egg" ? "#eab308" : "#ef4444")} 
+                  />
                 </div>
               ))}
             </div>
           )}
         </main>
 
-        <div className="hidden md:block">
-          <CartFAB onClick={() => setCartOpen(true)} />
-          <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
-        </div>
+        {totalItems > 0 && (
+          <>
+            <CartFAB onClick={() => setCartOpen(true)} />
+            <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
+            {flyingItems.map((item) => (
+              <FlyToCart
+                key={item.id}
+                startPosition={item.startPosition}
+                endPosition={item.endPosition}
+                color={item.color}
+                onComplete={() => removeFlyingItem(item.id)}
+              />
+            ))}
+          </>
+        )}
 
         {isMobile && (
           <>
