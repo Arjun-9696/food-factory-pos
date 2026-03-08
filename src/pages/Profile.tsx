@@ -20,7 +20,6 @@ import {
   Star
 } from "lucide-react";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "motion/react";
 import { MobileNav } from "@/components/pos/MobileNav";
 import { CartDrawer } from "@/components/pos/CartDrawer";
 import {
@@ -308,7 +307,7 @@ export default function Profile() {
       <header className="sticky top-0 z-40 glass-surface border-b border-border/50">
         <div className="container mx-auto px-4 py-3 flex items-center gap-3">
           <Link to="/" className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center">
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5 text-muted-foreground dark:text-gray-400" />
           </Link>
           <div>
             <h1 className="text-lg font-bold text-foreground">My Profile</h1>
@@ -328,7 +327,7 @@ export default function Profile() {
                 : "bg-secondary text-foreground hover:bg-secondary/80"
             }`}
           >
-            <User className="w-4 h-4 inline mr-2" />
+            <User className="w-4 h-4 inline mr-2 text-muted-foreground dark:text-gray-400" />
             Profile
           </button>
           <button
@@ -339,7 +338,7 @@ export default function Profile() {
                 : "bg-secondary text-foreground hover:bg-secondary/80"
             }`}
           >
-            <MapPin className="w-4 h-4 inline mr-2" />
+            <MapPin className="w-4 h-4 inline mr-2 text-muted-foreground dark:text-gray-400" />
             Addresses
           </button>
         </div>

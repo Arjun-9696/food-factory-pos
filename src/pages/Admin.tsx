@@ -861,7 +861,7 @@ export default function Admin() {
                     <label className="text-sm font-medium text-foreground dark:text-white mb-1 block">Category</label>
                     <div className="flex gap-2">
                       <Select value={form.category} onValueChange={(value) => setForm({ ...form, category: value })}>
-                        <SelectTrigger className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-foreground dark:text-white">
+                        <SelectTrigger className="flex-1 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-foreground dark:text-white">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
