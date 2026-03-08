@@ -13,7 +13,7 @@ import { ProductSkeleton } from "@/components/pos/ProductSkeleton";
 import { Highlighter } from "@/components/magicui/highlighter";
 import { Marquee } from "@/components/magicui/marquee";
 import { ProductAnimatedList } from "@/components/pos/ProductAnimatedList";
-import { MobileSearchResults } from "@/components/pos/MobileSearchResults";
+import { MobileSearchResults, SearchResults } from "@/components/pos/MobileSearchResults";
 import { FlyToCart, useFlyToCart } from "@/components/pos/FlyToCart";
 import { LayoutGrid, List, ArrowUpDown } from "lucide-react";
 import { getCategoryEmoji } from "@/data/categories";
@@ -75,6 +75,24 @@ function POSContent() {
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);
   }, [activeCategory]);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) return;
+    
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const isSearchInput = target.closest('input[placeholder="Search menu..."]');
+      const isSearchResult = target.closest('[data-search-results]');
+      const isButton = target.closest('button');
+      
+      if (!isSearchInput && !isSearchResult && !isButton) {
+        setSearchQuery("");
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [searchQuery]);
 
   const handleCategorySelect = (category: string) => {
     setActiveCategory(category);
@@ -153,11 +171,15 @@ function POSContent() {
           isDark={isDark}
           onToggleDark={toggleDark}
           cartCount={totalItems}
+          products={products}
+          cartItems={cartItems}
+          onAddToCart={addItem}
+          onUpdateQuantity={updateQuantity}
         />
         
         {/* Mobile Search Results - positioned below header */}
         {isMobile && searchQuery.trim() && (
-          <div className="relative">
+          <div className="relative md:hidden">
             <MobileSearchResults
               query={searchQuery}
               products={products}
@@ -168,7 +190,7 @@ function POSContent() {
             />
           </div>
         )}
-
+        
         <div className="max-w-6xl mx-auto px-4 pt-4 pb-2">
           <div className="text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-black dark:text-white">

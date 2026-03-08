@@ -261,7 +261,7 @@ export function ProductCard({ item, onAddPosition }: ProductCardProps) {
 
         <div className="flex flex-col">
          
-          <span className="text-xl md:text-2xl font-extrabold text-orange-600 dark:text-orange-400">
+          <span className="text-2xl md:text-2xl font-extrabold text-orange-600 dark:text-orange-400">
             ₹ {item.price}
           </span>
         </div>
@@ -277,7 +277,7 @@ export function ProductCard({ item, onAddPosition }: ProductCardProps) {
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleAdd}
-              className="relative px-4 md:px-6 py-1 md:py-[9px] rounded-full text-sm font-bold 
+              className="relative px-4 md:px-6 py-2 md:py-[10px] rounded-full text-sm font-bold 
               bg-gradient-to-r from-orange-500 via-orange-500 to-amber-500 
               text-white shadow-lg shadow-orange-500/30 
               hover:shadow-orange-500/50 overflow-hidden group"
@@ -303,7 +303,7 @@ export function ProductCard({ item, onAddPosition }: ProductCardProps) {
                 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-sm 
                 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all shadow-sm"
               >
-                <Minus className="w-3.5 h-3.5" />
+                <Minus className="w-3.5 h-3.5 text-muted-foreground dark:text-gray-400" />
               </motion.button>
 
               <motion.span

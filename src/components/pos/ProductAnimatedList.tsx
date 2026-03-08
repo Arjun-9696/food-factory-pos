@@ -77,7 +77,7 @@ function ProductItem({ item, quantity, onAdd, onRemove, index }: ProductItemProp
                   onClick={onRemove}
                   className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                 >
-                  <Minus className="w-3.5 h-3.5 text-foreground dark:text-white" />
+                  <Minus className="w-3.5 h-3.5 text-muted-foreground dark:text-gray-400" />
                 </button>
                 <span className="w-6 text-center text-sm font-bold text-foreground dark:text-white">
                   {quantity}

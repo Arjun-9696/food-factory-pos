@@ -2,6 +2,9 @@ import { Search, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { UserMenu } from "./UserMenu";
 import { AnimatedThemeToggler } from "@/components/magicui/animated-theme-toggler";
+import { SearchResults } from "./MobileSearchResults";
+import { type MenuItem } from "@/data/menu";
+import { useState, useEffect } from "react";
 
 interface POSHeaderProps {
   searchQuery: string;
@@ -9,10 +12,36 @@ interface POSHeaderProps {
   isDark: boolean;
   onToggleDark: () => void;
   cartCount?: number;
+  products?: MenuItem[];
+  cartItems?: { item: MenuItem; quantity: number }[];
+  onAddToCart?: (item: MenuItem) => void;
+  onUpdateQuantity?: (itemId: string, qty: number) => void;
 }
 
-export function POSHeader({ searchQuery, onSearchChange, isDark, onToggleDark, cartCount = 0 }: POSHeaderProps) {
+export function POSHeader({ 
+  searchQuery, 
+  onSearchChange, 
+  isDark, 
+  onToggleDark, 
+  cartCount = 0,
+  products = [],
+  cartItems = [],
+  onAddToCart,
+  onUpdateQuantity,
+}: POSHeaderProps) {
   const { isAdmin } = useAuth();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const handleCloseSearch = () => {
+    onSearchChange("");
+  };
 
   return (
     <header className="sticky top-0 z-40 glass-surface border-b border-border/30">
@@ -48,7 +77,7 @@ export function POSHeader({ searchQuery, onSearchChange, isDark, onToggleDark, c
 
           {/* Search */}
           <div className="flex-1 max-w-md relative hidden md:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
             <input
               type="text"
               placeholder="Search menu..."
@@ -56,6 +85,19 @@ export function POSHeader({ searchQuery, onSearchChange, isDark, onToggleDark, c
               onChange={(e) => onSearchChange(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-secondary/80 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             />
+            {/* Desktop Search Results - positioned relative to search input */}
+            {!isMobile && searchQuery.trim() && products.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2">
+                <SearchResults
+                  query={searchQuery}
+                  products={products}
+                  cartItems={cartItems}
+                  onAddToCart={onAddToCart!}
+                  onUpdateQuantity={onUpdateQuantity!}
+                  onClose={handleCloseSearch}
+                />
+              </div>
+            )}
           </div>
 
           {/* Right controls */}
@@ -72,7 +114,7 @@ export function POSHeader({ searchQuery, onSearchChange, isDark, onToggleDark, c
 
         {/* Mobile search */}
         <div className="mt-3 md:hidden relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
           <input
             type="text"
             placeholder="Search menu..."

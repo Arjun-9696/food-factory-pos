@@ -362,7 +362,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button onClick={() => updateQuantity(ci.item.id, ci.quantity - 1)}
                     className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center">
-                    <Minus className="w-3.5 h-3.5" />
+                    <Minus className="w-3.5 h-3.5 text-muted-foreground dark:text-gray-400" />
                   </button>
                   <span className="w-6 text-center text-sm font-bold text-foreground">{ci.quantity}</span>
                   <button onClick={() => updateQuantity(ci.item.id, ci.quantity + 1)}
