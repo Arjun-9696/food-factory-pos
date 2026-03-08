@@ -1,0 +1,8 @@
+{
+	"appId": "com.foodfactorypos.app",
+	"appName": "Food Factory POS",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https"
+	}
+}
