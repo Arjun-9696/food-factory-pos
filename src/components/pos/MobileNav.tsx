@@ -57,8 +57,8 @@ export function MobileNav({ onCartClick }: MobileNavProps) {
   };
 
   return (
-    <div className={`fixed bottom-0 left-0 right-0 z-50 md:hidden ${dockBg} ${borderClass} border-t backdrop-blur-xl`}>
-      <div className="flex items-end justify-between px-2 h-20 relative max-w-md mx-auto">
+    <div className={`fixed bottom-0 left-0 right-0 z-50 md:hidden ${dockBg} ${borderClass} border-t backdrop-blur-xl safe-area-bottom`}>
+      <div className="flex items-end justify-between px-2 h-20 pb-2 relative max-w-md mx-auto">
 
         {mainItems.slice(0, 2).map((item) => (
           <button

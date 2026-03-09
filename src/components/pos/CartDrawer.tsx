@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Plus, Minus, Trash2, ShoppingBag, Printer, Tag, Send, Loader2, QrCode, User, Phone } from "lucide-react";
+import { X, Plus, Minus, Trash2, ShoppingBag, Printer, Tag, Send, Loader2, QrCode, User, Phone, Download, Share2, CheckCircle } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_CONFIG } from "@/lib/appwrite";
@@ -15,6 +15,8 @@ import {
   ExpandableScreenContent,
   ExpandableScreenTrigger,
 } from "@/components/ui/expandable-screen";
+import { browserNotification } from "@/lib/notifications";
+import { downloadBillPDF } from "@/lib/billGenerator";
 
 const triggerConfetti = () => {
   const end = Date.now() + 3 * 1000;
@@ -239,19 +241,9 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
 
   const saveOrderToAppwrite = useCallback(async () => {
     const orderData = {
-      orderNumber,
-      customerName: customerName || null,
-      customerPhone: customerPhone || null,
-      subtotal, discount, gst, grandTotal,
+      customerName: customerName || "Guest",
       status: "completed",
-      userId: user?.id,
-      createdAt: new Date().toISOString(),
-      items: items.map(ci => ({
-        productName: ci.item.name,
-        productPrice: ci.item.price,
-        quantity: ci.quantity,
-        total: ci.item.price * ci.quantity,
-      })),
+      totalAmount: grandTotal,
     };
     try {
       await databases.createDocument(
@@ -260,10 +252,11 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
         ID.unique(),
         orderData
       );
-    } catch {
+    } catch (e) {
+      console.error("Order save error:", e);
       saveOrderLocally({ ...orderData, id: "ord_" + Math.random().toString(36).substr(2, 9) });
     }
-  }, [orderNumber, customerName, customerPhone, subtotal, discount, gst, grandTotal, user, items]);
+  }, [grandTotal, customerName]);
 
   const resetAfterOrder = useCallback(() => {
     clearCart();
@@ -310,15 +303,126 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   }, [customerPhone, saveOrderToAppwrite, orderNumber, customerName, items, subtotal, discount, gst, grandTotal, resetAfterOrder, navigate]);
 
   const handleQRPaid = useCallback(async () => {
+    setCompletedOrder({
+      orderNumber,
+      grandTotal,
+      items: items.map(ci => ({ name: ci.item.name, price: ci.item.price, quantity: ci.quantity })),
+      subtotal,
+      discount,
+      gst,
+      customerName: customerName || undefined,
+      customerPhone: customerPhone || undefined,
+    });
+    
     await saveOrderToAppwrite();
-    toast.success("Payment confirmed! Order saved 🎉");
+    
+    browserNotification.notifyOrderConfirmed(orderNumber, grandTotal);
+    
     triggerConfetti();
+    
+    setShowOrderComplete(true);
     resetAfterOrder();
+  }, [saveOrderToAppwrite, orderNumber, grandTotal, resetAfterOrder, items, subtotal, discount, gst, customerName, customerPhone]);
+
+  const [showOrderComplete, setShowOrderComplete] = useState(false);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [completedOrder, setCompletedOrder] = useState<{
+    orderNumber: string;
+    grandTotal: number;
+    items: { name: string; price: number; quantity: number }[];
+    subtotal: number;
+    discount: number;
+    gst: number;
+    customerName?: string;
+    customerPhone?: string;
+  } | null>(null);
+
+  const handleDownloadPDF = useCallback(async () => {
+    if (!completedOrder) return;
+    setDownloadingPDF(true);
+    try {
+      downloadBillPDF(completedOrder);
+      toast.success("Bill downloaded!");
+    } catch {
+      toast.error("Failed to download bill");
+    } finally {
+      setDownloadingPDF(false);
+    }
+  }, [completedOrder]);
+
+  const handleCloseOrderComplete = useCallback(() => {
+    setShowOrderComplete(false);
     onClose();
     navigate("/");
-  }, [saveOrderToAppwrite, resetAfterOrder, onClose, navigate]);
+  }, [onClose, navigate]);
 
   if (!open) return null;
+
+  if (showOrderComplete) {
+    return (
+      <>
+        <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm z-50" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="bg-gradient-to-br from-orange-500 to-amber-500 p-6 text-center">
+              <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <CheckCircle className="w-12 h-12 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-white">Order Placed!</h2>
+              <p className="text-white/80 text-sm">Thank you for your order</p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="bg-secondary rounded-xl p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-muted-foreground">Order Number</span>
+                  <span className="font-bold text-foreground">#{completedOrder?.orderNumber || orderNumber}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Total Amount</span>
+                  <span className="font-bold text-orange-500 text-lg">₹{(completedOrder?.grandTotal || grandTotal).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  onClick={handleDownloadPDF}
+                  disabled={downloadingPDF}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {downloadingPDF ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  Download Bill (PDF)
+                </button>
+                
+                <button
+                  onClick={handleWhatsApp}
+                  className="w-full py-3 rounded-xl bg-green-500 text-white font-semibold flex items-center justify-center gap-2"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Share on WhatsApp
+                </button>
+                
+                <button
+                  onClick={handleCloseOrderComplete}
+                  className="w-full py-3 rounded-xl border-2 border-border text-foreground font-semibold"
+                >
+                  Continue Shopping
+                </button>
+              </div>
+
+              <p className="text-center text-xs text-muted-foreground">
+                A push notification will be sent to update you about your order status.
+              </p>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
