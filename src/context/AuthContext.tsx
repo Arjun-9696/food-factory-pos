@@ -74,6 +74,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
+      // Check if there's already an active session
+      try {
+        const existingSession = await account.get();
+        // Already logged in, just update state
+        const isAdminEmail = existingSession.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        setUser({ id: existingSession.$id, email: existingSession.email, name: existingSession.name || email.split("@")[0] });
+        setIsAdmin(isAdminEmail);
+        return { error: null };
+      } catch {
+        // No active session, create new one
+      }
+      
       await account.createEmailPasswordSession(email, password);
       const session = await account.get();
       
@@ -90,6 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (error.code === 429) {
         return { error: "Too many attempts. Please wait a moment and try again." };
+      }
+      if (error.message?.includes("session is active")) {
+        // Already logged in, refresh the page
+        window.location.reload();
+        return { error: null };
       }
       return { error: error.message || "Login failed. Please try again." };
     }

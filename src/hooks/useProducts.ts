@@ -54,20 +54,18 @@ export function useProducts() {
       // If no categories in DB, create from products
       for (const catName of productCategories) {
         try {
-          const emoji = CATEGORY_EMOJI_MAP[catName] || "🍴";
           await databases.createDocument(
             APPWRITE_CONFIG.DATABASE_ID,
             APPWRITE_CONFIG.CATEGORIES_COLLECTION,
             ID.unique(),
-            { name: catName, emoji }
+            { name: catName }
           );
-          dbEmojis[catName] = emoji;
         } catch (e) {
-          dbEmojis[catName] = CATEGORY_EMOJI_MAP[catName] || "🍴";
+          // Category may already exist, ignore
         }
       }
 
-      return { names: ["All", ...productCategories], emojis: dbEmojis };
+      return { names: ["All", ...productCategories], emojis: CATEGORY_EMOJI_MAP };
     } catch (error) {
       // If categories collection doesn't exist, use products + defaults
       const fallbackEmojis: Record<string, string> = { ...CATEGORY_EMOJI_MAP };

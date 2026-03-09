@@ -163,7 +163,7 @@ function POSContent() {
   }, [isMobile, handleScroll]);
 
   return (
-    <div className="min-h-screen bg-background relative">
+    <div className="min-h-screen bg-background relative fullscreen-app no-overscroll">
       <div className="relative z-10">
         <POSHeader
           searchQuery={searchQuery}

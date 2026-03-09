@@ -17,7 +17,9 @@ import {
   Mail,
   Home,
   Building,
-  Star
+  Star,
+  MapPinned,
+  Navigation
 } from "lucide-react";
 import { toast } from "sonner";
 import { MobileNav } from "@/components/pos/MobileNav";
@@ -39,6 +41,8 @@ interface Address {
   pincode: string;
   phone: string;
   isDefault: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface Profile {
@@ -47,6 +51,11 @@ interface Profile {
   alternatePhone?: string;
   dateOfBirth?: string;
   gender?: string;
+}
+
+interface GeoLocation {
+  latitude: number;
+  longitude: number;
 }
 
 export default function Profile() {
@@ -59,6 +68,8 @@ export default function Profile() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   // Profile form
   const [profileForm, setProfileForm] = useState({
@@ -79,6 +90,8 @@ export default function Profile() {
     pincode: "",
     phone: "",
     isDefault: false,
+    latitude: 0,
+    longitude: 0,
   });
 
   useEffect(() => {
@@ -93,10 +106,10 @@ export default function Profile() {
       const response = await databases.listDocuments(
         APPWRITE_CONFIG.DATABASE_ID,
         APPWRITE_CONFIG.PROFILES_COLLECTION,
-        [Query.equal("userId", user!.id)]
+        [Query.equal("userId", [user!.id])]
       );
       if (response.documents.length > 0) {
-        const doc = response.documents[0] as any;
+        const doc = response.documents[0] as unknown as Profile;
         setProfile(doc);
         setProfileForm({
           phone: doc.phone || "",
@@ -115,9 +128,9 @@ export default function Profile() {
       const response = await databases.listDocuments(
         APPWRITE_CONFIG.DATABASE_ID,
         APPWRITE_CONFIG.ADDRESSES_COLLECTION,
-        [Query.equal("userId", user!.id), Query.orderDesc("isDefault")]
+        [Query.equal("userId", [user!.id]), Query.orderDesc("$createdAt")]
       );
-      setAddresses(response.documents as any);
+      setAddresses(response.documents as unknown as Address[]);
     } catch (error) {
       console.error("Error fetching addresses:", error);
     } finally {
@@ -139,6 +152,7 @@ export default function Profile() {
         alternatePhone: profileForm.alternatePhone?.trim() || "",
         dateOfBirth: profileForm.dateOfBirth || "",
         gender: profileForm.gender,
+        updatedAt: new Date().toISOString(),
       };
 
       if (profile) {
@@ -156,13 +170,105 @@ export default function Profile() {
           ID.unique(),
           data
         );
-        setProfile(newProfile as any);
+        setProfile(newProfile as unknown as Profile);
         toast.success("Profile saved!");
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to save profile");
+    } catch (error: unknown) {
+      const err = error as { message?: string; type?: string; code?: string };
+      console.error("Profile save error:", err);
+      toast.error(err.message || "Failed to save profile. Please try again.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const getCurrentLocation = (): Promise<GeoLocation> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation is not supported by your browser"));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          let errorMessage = "Unable to get location";
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = "Location permission denied. Please enable location access.";
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = "Location information is unavailable.";
+              break;
+            case error.TIMEOUT:
+              errorMessage = "Location request timed out.";
+              break;
+          }
+          reject(new Error(errorMessage));
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      );
+    });
+  };
+
+  const reverseGeocode = async (lat: number, lng: number): Promise<Partial<typeof addressForm>> => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
+      );
+      const data = await response.json();
+      
+      if (data.address) {
+        const addr = data.address;
+        return {
+          fullAddress: [
+            addr.road || addr.neighbourhood || "",
+            addr.suburb || "",
+            addr.city || addr.town || addr.village || ""
+          ].filter(Boolean).join(", "),
+          city: addr.city || addr.town || addr.village || "",
+          state: addr.state || "",
+          pincode: addr.postcode || "",
+        };
+      }
+      return {};
+    } catch (error) {
+      console.error("Reverse geocode error:", error);
+      return {};
+    }
+  };
+
+  const handleGetCurrentLocation = async () => {
+    setGettingLocation(true);
+    setLocationError(null);
+
+    try {
+      const location = await getCurrentLocation();
+      const addressParts = await reverseGeocode(location.latitude, location.longitude);
+      
+      setAddressForm((prev) => ({
+        ...prev,
+        ...addressParts,
+        latitude: location.latitude,
+        longitude: location.longitude,
+      }));
+      
+      toast.success("Location found! Please verify and edit the address if needed.");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to get location";
+      setLocationError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setGettingLocation(false);
     }
   };
 
@@ -175,9 +281,12 @@ export default function Profile() {
       pincode: "",
       phone: "",
       isDefault: false,
+      latitude: 0,
+      longitude: 0,
     });
     setEditingAddressId(null);
     setShowAddressForm(false);
+    setLocationError(null);
   };
 
   const saveAddress = async () => {
@@ -197,19 +306,22 @@ export default function Profile() {
         pincode: addressForm.pincode.trim(),
         phone: addressForm.phone.trim() || profileForm.phone,
         isDefault: addressForm.isDefault,
+        latitude: addressForm.latitude,
+        longitude: addressForm.longitude,
       };
 
       if (addressForm.isDefault) {
-        for (const addr of addresses) {
-          if (addr.isDefault) {
-            await databases.updateDocument(
+        const updatePromises = addresses
+          .filter((addr) => addr.isDefault)
+          .map((addr) =>
+            databases.updateDocument(
               APPWRITE_CONFIG.DATABASE_ID,
               APPWRITE_CONFIG.ADDRESSES_COLLECTION,
               addr.$id,
               { isDefault: false }
-            );
-          }
-        }
+            )
+          );
+        await Promise.all(updatePromises);
       }
 
       if (editingAddressId) {
@@ -232,8 +344,9 @@ export default function Profile() {
       
       resetAddressForm();
       fetchAddresses();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to save address");
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      toast.error(err.message || "Failed to save address");
     } finally {
       setSaving(false);
     }
@@ -257,16 +370,18 @@ export default function Profile() {
 
   const setDefaultAddress = async (address: Address) => {
     try {
-      for (const addr of addresses) {
-        if (addr.isDefault) {
-          await databases.updateDocument(
+      const updatePromises = addresses
+        .filter((addr) => addr.isDefault)
+        .map((addr) =>
+          databases.updateDocument(
             APPWRITE_CONFIG.DATABASE_ID,
             APPWRITE_CONFIG.ADDRESSES_COLLECTION,
             addr.$id,
             { isDefault: false }
-          );
-        }
-      }
+          )
+        );
+      await Promise.all(updatePromises);
+      
       await databases.updateDocument(
         APPWRITE_CONFIG.DATABASE_ID,
         APPWRITE_CONFIG.ADDRESSES_COLLECTION,
@@ -289,6 +404,8 @@ export default function Profile() {
       pincode: addr.pincode,
       phone: addr.phone,
       isDefault: addr.isDefault,
+      latitude: addr.latitude || 0,
+      longitude: addr.longitude || 0,
     });
     setEditingAddressId(addr.$id);
     setShowAddressForm(true);
@@ -303,8 +420,8 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 glass-surface border-b border-border/50">
+    <div className="min-h-screen bg-background fullscreen-app">
+      <header className="sticky top-0 z-40 glass-surface border-b border-border/50 safe-area-top">
         <div className="container mx-auto px-4 py-3 flex items-center gap-3">
           <Link to="/" className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center">
             <ArrowLeft className="w-5 h-5 text-muted-foreground dark:text-gray-400" />
@@ -316,7 +433,7 @@ export default function Profile() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-4 pb-40">
+      <main className="container mx-auto px-4 py-4 pb-28">
         {/* Tabs */}
         <div className="flex gap-2 mb-6">
           <button
@@ -331,9 +448,9 @@ export default function Profile() {
             Profile
           </button>
           <button
-            onClick={() => setSearchParams({ tab: APPWRITE_CONFIG.ADDRESSES_COLLECTION })}
+            onClick={() => setSearchParams({ tab: "addresses" })}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-              activeTab === APPWRITE_CONFIG.ADDRESSES_COLLECTION 
+              activeTab === "addresses" 
                 ? "cart-gradient text-primary-foreground" 
                 : "bg-secondary text-foreground hover:bg-secondary/80"
             }`}
@@ -449,6 +566,34 @@ export default function Profile() {
                   <button onClick={resetAddressForm} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center text-foreground">
                     <X className="w-4 h-4 text-muted-foreground dark:text-gray-400" />
                   </button>
+                </div>
+
+                {/* Get Current Location Button */}
+                <div className="mb-4">
+                  <button
+                    onClick={handleGetCurrentLocation}
+                    disabled={gettingLocation}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50 transition-transform active:scale-[0.98]"
+                  >
+                    {gettingLocation ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Navigation className="w-4 h-4" />
+                    )}
+                    {gettingLocation ? "Getting Location..." : "Use Current Location"}
+                  </button>
+                  {locationError && (
+                    <p className="text-xs text-destructive mt-2 flex items-center gap-1">
+                      <MapPinned className="w-3 h-3" />
+                      {locationError}
+                    </p>
+                  )}
+                  {addressForm.latitude !== 0 && addressForm.longitude !== 0 && (
+                    <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      Location detected - Please verify address below
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-4">
