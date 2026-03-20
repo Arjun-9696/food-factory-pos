@@ -1,4 +1,4 @@
-import { ShoppingBag, Home, User, Clock, Settings } from "lucide-react";
+import { ShoppingBag, Home, User, Clock, Settings,ReceiptIndianRupee } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -36,7 +36,7 @@ export function MobileNav({ onCartClick }: MobileNavProps) {
 
   const mainItems = [
     { icon: Home, label: "Home", path: "/" },
-    { icon: Clock, label: "Orders", path: "/orders" },
+    { icon: ReceiptIndianRupee, label: "Orders", path: "/orders" },
     { icon: User, label: "Profile", path: "/profile" },
   ];
 
@@ -57,8 +57,8 @@ export function MobileNav({ onCartClick }: MobileNavProps) {
   };
 
   return (
-    <div className={`fixed bottom-0 left-0 right-0 z-50 md:hidden ${dockBg} ${borderClass} border-t backdrop-blur-xl safe-area-bottom`}>
-      <div className="flex items-end justify-between px-2 h-20 pb-2 relative max-w-md mx-auto">
+    <div className={`fixed bottom-0 left-0 right-0 z-50 md:hidden ${dockBg} ${borderClass} border-t backdrop-blur-xl pb-safe`}>
+      <div className="flex items-end justify-between px-2 h-20 relative max-w-md mx-auto">
 
         {mainItems.slice(0, 2).map((item) => (
           <button
@@ -80,10 +80,10 @@ export function MobileNav({ onCartClick }: MobileNavProps) {
             onClick={onCartClick}
             className="absolute left-1/2 -translate-x-1/2 -top-5 flex flex-col items-center"
           >
-            <div className="relative w-14 h-14 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/40 border-4 border-inherit">
-              <ShoppingBag className="w-6 h-6 text-white" />
+            <div className="relative w-16 h-16 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/40 border-4 border-inherit">
+              <ShoppingBag className="w-7 h-7 text-white" />
             </div>
-            <span className="absolute -top-1 -right-1 min-w-[20px] h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow-md">
+            <span className="absolute -top-1 -right-1 min-w-[22px] h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow-md">
               {totalItems}
             </span>
           </button>

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, LogIn, UserPlus, Coffee } from "lucide-react";
+import { Eye, EyeOff, LogIn, UserPlus} from "lucide-react";
 import { toast } from "sonner";
 import { MagicCard } from "@/components/magicui/magic-card";
 import { useTheme } from "next-themes";
@@ -10,33 +10,39 @@ import { MobileNav } from "@/components/pos/MobileNav";
 import { CartDrawer } from "@/components/pos/CartDrawer";
 
 const triggerConfetti = () => {
-  const end = Date.now() + 3 * 1000;
-  const colors = ["#a786ff", "#fd8bbc", "#eca184", "#f8deb1"];
+  const colors = ["#ff6a00", "#ff9a00", "#ffd54f", "#ff3d00"];
 
-  const frame = () => {
-    if (Date.now() > end) return;
-
+  const shoot = (originX: number) => {
     confetti({
-      particleCount: 2,
-      angle: 60,
-      spread: 55,
-      startVelocity: 60,
-      origin: { x: 0, y: 0.5 },
-      colors: colors,
+      particleCount: 30,
+      spread: 70,
+      startVelocity: 45,
+      gravity: 1,
+      ticks: 200,
+      origin: { x: originX, y: 0.6 },
+      colors,
+      scalar: 1.1,
     });
-    confetti({
-      particleCount: 2,
-      angle: 120,
-      spread: 55,
-      startVelocity: 60,
-      origin: { x: 1, y: 0.5 },
-      colors: colors,
-    });
-
-    requestAnimationFrame(frame);
   };
 
-  frame();
+  // left burst
+  shoot(0.1);
+
+  // right burst
+  shoot(0.9);
+
+  // center burst for effect
+  setTimeout(() => {
+    confetti({
+      particleCount: 100,
+      spread: 100,
+      startVelocity: 50,
+      gravity: 0.9,
+      origin: { x: 0.5, y: 0.5 },
+      colors,
+      scalar: 1.2,
+    });
+  }, 200);
 };
 
 export default function Login() {
@@ -101,8 +107,10 @@ export default function Login() {
           
           <div className="p-6 space-y-6 relative z-10">
             <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 mb-3">
-                <Coffee className="w-8 h-8 text-white" />
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full 
+bg-gradient-to-br from-[#e600ff] via-[#6427ff] to-[#1efffb] shadow-lg shadow-[#4e518753] mb-3">
+                {/* <Coffee className="w-8 h-8 text-white" /> */}
+                <img src="/foodfactory.svg"  className="w-8 h-8 contrast-100 saturate-150 brightness-125 drop-shadow-md" alt="" />
               </div>
               <h1 className="text-2xl font-extrabold text-foreground">Food Factory</h1>
               <p className="text-xs text-muted-foreground font-medium tracking-wider uppercase mt-1">The Quality Taste</p>
@@ -135,6 +143,7 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={4}
+                  autoComplete="current-password"
                   className="w-full px-4 py-3 pr-10 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">

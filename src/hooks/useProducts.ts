@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import { databases, storage, APPWRITE_CONFIG } from "@/lib/appwrite";
-import { Query, ID } from "appwrite";
+import { supabase, SUPABASE_CONFIG } from "@/lib/supabaseClient";
 import type { MenuItem } from "@/data/menu";
-import { getCategoryEmoji, CATEGORY_EMOJI_MAP } from "@/data/categories";
+import { CATEGORY_EMOJI_MAP } from "@/data/categories";
 
 export interface CategoryData {
   name: string;
@@ -13,11 +12,7 @@ function getImageUrl(image: string): string {
   if (!image) return "";
   if (image.startsWith('data:') || image.startsWith('blob:')) return image;
   if (image.startsWith('http')) return image;
-  
-  const bucketId = APPWRITE_CONFIG.IMAGES_BUCKET;
-  const projectId = APPWRITE_CONFIG.PROJECT_ID;
-  const endpoint = APPWRITE_CONFIG.ENDPOINT;
-  return `${endpoint}/storage/buckets/${bucketId}/files/${image}/view?project=${projectId}`;
+  return image;
 }
 
 export function useProducts() {
@@ -32,82 +27,96 @@ export function useProducts() {
 
   const fetchCategoriesFromDB = async (productCategories: string[]): Promise<{ names: string[]; emojis: Record<string, string> }> => {
     try {
-      const response = await databases.listDocuments(
-        APPWRITE_CONFIG.DATABASE_ID,
-        APPWRITE_CONFIG.CATEGORIES_COLLECTION,
-        [Query.limit(100), Query.orderAsc("name")]
-      );
+      const { data, error } = await supabase
+        .from("categories")
+        .select("*")
+        .order("name", { ascending: true });
+
+      if (error) {
+        console.error("Categories fetch error:", error);
+        throw error;
+      }
 
       const dbEmojis: Record<string, string> = { ...CATEGORY_EMOJI_MAP };
       const dbNames: string[] = ["All"];
+      const dbCategoryNames = new Set<string>();
 
-      if (response.documents.length > 0) {
-        response.documents.forEach((doc: any) => {
+      if (data && data.length > 0) {
+        data.forEach((doc: any) => {
           if (doc.name) {
+            dbCategoryNames.add(doc.name);
             dbNames.push(doc.name);
             dbEmojis[doc.name] = doc.emoji || CATEGORY_EMOJI_MAP[doc.name] || "🍴";
           }
         });
-        return { names: dbNames, emojis: dbEmojis };
       }
 
-      // If no categories in DB, create from products
       for (const catName of productCategories) {
-        try {
-          await databases.createDocument(
-            APPWRITE_CONFIG.DATABASE_ID,
-            APPWRITE_CONFIG.CATEGORIES_COLLECTION,
-            ID.unique(),
-            { name: catName }
-          );
-        } catch (e) {
-          // Category may already exist, ignore
+        if (!dbCategoryNames.has(catName)) {
+          const emoji = CATEGORY_EMOJI_MAP[catName] || "🍴";
+          dbNames.push(catName);
+          dbEmojis[catName] = emoji;
+          try {
+            await supabase
+              .from("categories")
+              .insert({ name: catName, emoji });
+          } catch (e) {
+            // Ignore duplicate errors
+          }
         }
       }
 
-      return { names: ["All", ...productCategories], emojis: CATEGORY_EMOJI_MAP };
+      const sortedNames = dbNames.slice(1).sort((a, b) => a.localeCompare(b));
+      return { names: ["All", ...sortedNames], emojis: dbEmojis };
     } catch (error) {
-      // If categories collection doesn't exist, use products + defaults
+      console.error("Error fetching categories:", error);
       const fallbackEmojis: Record<string, string> = { ...CATEGORY_EMOJI_MAP };
       productCategories.forEach(cat => {
         if (!fallbackEmojis[cat]) {
           fallbackEmojis[cat] = "🍴";
         }
       });
-      return { names: ["All", ...productCategories], emojis: fallbackEmojis };
+      const sortedCats = [...productCategories].sort((a, b) => a.localeCompare(b));
+      return { names: ["All", ...sortedCats], emojis: fallbackEmojis };
     }
   };
 
   const fetchProducts = useCallback(async () => {
     try {
-      const productsResponse = await databases.listDocuments(
-        APPWRITE_CONFIG.DATABASE_ID,
-        APPWRITE_CONFIG.PRODUCTS_COLLECTION,
-        [Query.limit(500), Query.equal("available", true), Query.orderAsc("category")]
-      );
+      console.log("Fetching products from Supabase...");
+      const { data: productsData, error: productsError } = await supabase
+        .from("products")
+        .select("*")
+        .eq("available", true)
+        .order("category", { ascending: true });
 
-      const items: MenuItem[] = productsResponse.documents.map((doc: any) => ({
-        id: doc.$id,
+      if (productsError) {
+        console.error("Products fetch error:", productsError);
+        throw productsError;
+      }
+
+      console.log("Products fetched:", productsData?.length);
+
+      const items: MenuItem[] = (productsData || []).map((doc: any) => ({
+        id: doc.id,
         name: doc.name,
         description: doc.description || "",
         category: doc.category,
-        price: Number(doc.price),
-        foodType: doc.foodType || (doc.isVeg === true ? "veg" : doc.isVeg === false ? "nonveg" : "veg"),
+        price: Number(doc.price) || 0,
+        foodType: doc.food_type || "veg",
         image: getImageUrl(doc.image),
         available: doc.available,
       }));
 
       setProducts(items);
       
-      // Get unique categories from products
       const productCategories = Array.from(new Set(items.map((p) => p.category))).sort();
-      
-      // Fetch categories from DB (will create if empty)
       const categoriesData = await fetchCategoriesFromDB(productCategories);
       
       setCategories(categoriesData.names);
       setCategoryEmojis(categoriesData.emojis);
     } catch (error) {
+      console.error("Error fetching products:", error);
       const { menuItems, categories: cats } = await import("@/data/menu");
       setProducts(menuItems);
       setCategories([...cats] as string[]);

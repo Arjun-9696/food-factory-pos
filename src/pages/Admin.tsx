@@ -3,12 +3,12 @@
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Link } from "react-router-dom";
-import { databases, APPWRITE_CONFIG, storage } from "@/lib/appwrite";
-import { ID, Query } from "appwrite";
+import { supabase, SUPABASE_CONFIG } from "@/lib/supabaseClient";
+import { uploadImageToCloudinary } from "@/lib/uploadImage";
 import { 
   ArrowLeft, Plus, Pencil, Trash2, ShieldAlert, Save, X, Upload, Loader2, 
   Package, CheckCircle, XCircle, Search, Grid, List, Coffee, Database,
-  ArrowUpDown, Eye, EyeOff, ChevronDown, ChevronUp, BarChart3
+  ArrowUpDown, Eye, EyeOff, ChevronDown, ChevronUp, BarChart3, Users, ReceiptIndianRupee
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
@@ -32,20 +32,19 @@ import {
 import { getCategoryEmoji, CATEGORY_EMOJI_MAP, AVAILABLE_EMOJIS } from "@/data/categories";
 
 interface Product {
-  $id: string;
+  id: string;
   name: string;
   description: string;
   category: string;
   price: number;
-  foodType: "veg" | "egg" | "nonveg";
+  food_type: "veg" | "egg" | "nonveg";
+  is_veg: boolean;
   image: string;
   available: boolean;
 }
 
 const DEFAULT_CATEGORIES = [
-  "Fresh Juice", "Fruite Milk Shake", "Food Factory Special", "Soda",
-  "Lassi", "Smoothie", "Falooda", "Mojito", "Health Drinks",
-  "Sandwich", "Non Veg Sandwich", "Maggie", "Non Veg Maggi",
+  "Burger", "Pizza", "Smoothies", "Mojito", "Lassi", "Shakes", "Chinese", "Fast Food", "Dessert"
 ];
 
 const categoryColors: Record<string, string> = {
@@ -118,6 +117,12 @@ export default function Admin() {
   const [newCategoryEmoji, setNewCategoryEmoji] = useState("🍴");
   const [categoryEmojis, setCategoryEmojis] = useState<Record<string, string>>(CATEGORY_EMOJI_MAP);
   const [categoryIds, setCategoryIds] = useState<Record<string, string>>({});
+  
+  // Dashboard stats
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [totalCustomers, setTotalCustomers] = useState(0);
+  const [todaySales, setTodaySales] = useState(0);
+  const [monthlySales, setMonthlySales] = useState(0);
 
   useEffect(() => {
     setIsDark(theme === "dark");
@@ -125,26 +130,26 @@ export default function Admin() {
 
   const fetchCategoriesFromDB = async () => {
     try {
-      const response = await databases.listDocuments(
-        APPWRITE_CONFIG.DATABASE_ID,
-        APPWRITE_CONFIG.CATEGORIES_COLLECTION,
-        [Query.limit(100)]
-      );
+      const { data, error } = await supabase
+        .from(SUPABASE_CONFIG.CATEGORIES_TABLE)
+        .select("*");
       
-      const emojis: Record<string, string> = { ...CATEGORY_EMOJI_MAP };
-      const ids: Record<string, string> = {};
-      
-      response.documents.forEach((doc: any) => {
-        if (doc.name) {
-          emojis[doc.name] = doc.emoji || CATEGORY_EMOJI_MAP[doc.name] || "🍴";
-          ids[doc.name] = doc.$id;
-        }
-      });
-      
-      setCategoryEmojis(emojis);
-      setCategoryIds(ids);
+      if (data && data.length > 0) {
+        const emojis: Record<string, string> = { ...CATEGORY_EMOJI_MAP };
+        const ids: Record<string, string> = {};
+        
+        data.forEach((doc: any) => {
+          if (doc.name) {
+            emojis[doc.name] = doc.emoji || CATEGORY_EMOJI_MAP[doc.name] || "🍴";
+            ids[doc.name] = doc.id;
+          }
+        });
+        
+        setCategoryEmojis(emojis);
+        setCategoryIds(ids);
+      }
     } catch (error) {
-      console.log("Using local category emojis");
+      console.log("Using local category emojis", error);
     }
   };
 
@@ -164,11 +169,17 @@ export default function Admin() {
 
   const checkDatabase = async () => {
     try {
-      await databases.listDocuments(
-        APPWRITE_CONFIG.DATABASE_ID,
-        APPWRITE_CONFIG.PRODUCTS_COLLECTION,
-        [Query.limit(1)]
-      );
+      console.log("Checking database connection...");
+      const { error } = await supabase
+        .from("products")
+        .select("id")
+        .limit(1);
+      
+      if (error) {
+        console.log("Database error:", error);
+        throw error;
+      }
+      console.log("Database ready!");
       setDbStatus("ready");
       return true;
     } catch (error: any) {
@@ -189,23 +200,25 @@ export default function Admin() {
 
   const fetchProducts = async () => {
     try {
-      const response = await databases.listDocuments(
-        APPWRITE_CONFIG.DATABASE_ID,
-        APPWRITE_CONFIG.PRODUCTS_COLLECTION,
-        [Query.limit(500), Query.orderDesc("name")]
-      );
-      const productsList = response.documents.map((doc: any) => {
-        let imageUrl = "";
-        const imageField = doc.image || "";
-        if (imageField) {
-          if (imageField.startsWith('http')) {
-            imageUrl = imageField;
-          } else {
-            imageUrl = `${APPWRITE_CONFIG.ENDPOINT}/storage/buckets/${APPWRITE_CONFIG.IMAGES_BUCKET}/files/${imageField}/view?project=${APPWRITE_CONFIG.PROJECT_ID}`;
-          }
-        }
-        return { ...doc, image: imageUrl };
-      }) as unknown as Product[];
+      console.log("Fetching products from admin...");
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .order("name", { ascending: true });
+      
+      if (error) {
+        console.error("Products fetch error:", error);
+        throw error;
+      }
+      
+      console.log("Admin products fetched:", data?.length);
+      
+      const productsList = (data || []).map((doc: any) => ({
+        ...doc,
+        foodType: doc.food_type || "veg",
+        image: doc.image || "",
+      })) as Product[];
+      
       setProducts(productsList);
       extractCategories(productsList);
     } catch (error: any) {
@@ -216,12 +229,38 @@ export default function Admin() {
     setLoading(false);
   };
 
+  const fetchDashboardStats = async () => {
+    try {
+      // Fetch total orders
+      const { count: ordersCount } = await supabase
+        .from("orders")
+        .select("*", { count: "exact", head: true });
+      setTotalOrders(ordersCount || 0);
+
+      // Fetch total customers
+      const { count: customersCount } = await supabase
+        .from("customers")
+        .select("*", { count: "exact", head: true });
+      setTotalCustomers(customersCount || 0);
+
+      // Reset sales to 0 since we removed them from display
+      setTodaySales(0);
+      setMonthlySales(0);
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+    }
+  };
+
   useEffect(() => {
     if (user && isAdmin) {
       fetchCategoriesFromDB();
       checkDatabase().then((ready) => {
-        if (ready) fetchProducts();
-        else setLoading(false);
+        if (ready) {
+          fetchProducts();
+          fetchDashboardStats();
+        } else {
+          setLoading(false);
+        }
       });
     } else {
       setLoading(false);
@@ -249,14 +288,13 @@ export default function Admin() {
 
   const startEdit = (p: Product) => {
     setEditingProduct(p);
-    const isFileId = p.image && !p.image.includes('/storage/') && !p.image.startsWith('http');
     setForm({
       name: p.name,
       description: p.description,
       category: p.category,
       price: p.price,
-      foodType: p.foodType || "veg",
-      image: isFileId ? p.image : "",
+      foodType: p.food_type || "veg",
+      image: p.image || "",
       imagePreview: p.image,
       available: p.available,
     });
@@ -283,9 +321,15 @@ export default function Admin() {
     setUploading(true);
     try {
       const tempPreview = URL.createObjectURL(file);
-      const uploaded = await storage.createFile(APPWRITE_CONFIG.IMAGES_BUCKET, ID.unique(), file);
-      const fileId = uploaded.$id;
-      setForm(prev => ({ ...prev, image: fileId, imagePreview: tempPreview }));
+      const { url, error: uploadError } = await uploadImageToCloudinary(file);
+      
+      if (uploadError) {
+        toast.error(uploadError);
+        setUploading(false);
+        return;
+      }
+      
+      setForm(prev => ({ ...prev, image: url, imagePreview: tempPreview }));
       toast.success("Image uploaded!");
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err: any) {
@@ -302,27 +346,47 @@ export default function Admin() {
       return;
     }
     try {
-      const data: Record<string, any> = {
+      const now = new Date().toISOString();
+      const data = {
+        id: crypto.randomUUID(),
         name: form.name.trim(),
         description: form.description || "",
         category: form.category,
         price: Number(form.price) || 0,
-        foodType: form.foodType,
+        food_type: form.foodType,
+        is_veg: form.foodType === "veg",
         available: form.available,
+        image: form.image || null,
+        created_at: now,
+        updated_at: now,
       };
       
-      if (form.image) {
-        const isFileId = !form.image.includes('/storage/') && !form.image.startsWith('http') && !form.image.startsWith('blob:') && !form.image.startsWith('data:');
-        data.image = form.image;
-      } else if (editingProduct?.image && !isNew) {
-        delete data.image;
-      }
-      
       if (isNew) {
-        await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.PRODUCTS_COLLECTION, ID.unique(), data);
+        const { error } = await supabase
+          .from(SUPABASE_CONFIG.PRODUCTS_TABLE)
+          .insert(data);
+        
+        if (error) throw error;
         toast.success("Product added successfully!");
       } else {
-        await databases.updateDocument(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.PRODUCTS_COLLECTION, editingProduct.$id, data);
+        const updateData = {
+          name: form.name.trim(),
+          description: form.description || "",
+          category: form.category,
+          price: Number(form.price) || 0,
+          food_type: form.foodType,
+          is_veg: form.foodType === "veg",
+          available: form.available,
+          image: form.image || null,
+          updated_at: now,
+        };
+        
+        const { error } = await supabase
+          .from(SUPABASE_CONFIG.PRODUCTS_TABLE)
+          .update(updateData)
+          .eq("id", editingProduct.id);
+        
+        if (error) throw error;
         toast.success("Product updated successfully!");
       }
       cancelEdit();
@@ -335,7 +399,12 @@ export default function Admin() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
     try {
-      await databases.deleteDocument(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.PRODUCTS_COLLECTION, id);
+      const { error } = await supabase
+        .from(SUPABASE_CONFIG.PRODUCTS_TABLE)
+        .delete()
+        .eq("id", id);
+      
+      if (error) throw error;
       toast.success("Product deleted!");
       fetchProducts();
     } catch {
@@ -345,7 +414,12 @@ export default function Admin() {
 
   const toggleAvailability = async (p: Product) => {
     try {
-      await databases.updateDocument(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.PRODUCTS_COLLECTION, p.$id, { available: !p.available });
+      const { error } = await supabase
+        .from(SUPABASE_CONFIG.PRODUCTS_TABLE)
+        .update({ available: !p.available })
+        .eq("id", p.id);
+      
+      if (error) throw error;
       fetchProducts();
       toast.success(p.available ? "Marked as out of stock" : "Marked as available");
     } catch {
@@ -366,16 +440,13 @@ export default function Admin() {
     }
 
     try {
-      // Save to database categories collection
-      try {
-        await databases.createDocument(
-          APPWRITE_CONFIG.DATABASE_ID,
-          APPWRITE_CONFIG.CATEGORIES_COLLECTION,
-          ID.unique(),
-          { name: trimmedName, emoji: newCategoryEmoji }
-        );
-      } catch (dbError) {
-        console.log("Categories collection not available, using local only");
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from(SUPABASE_CONFIG.CATEGORIES_TABLE)
+        .insert({ name: trimmedName, emoji: newCategoryEmoji, created_at: now });
+      
+      if (error) {
+        console.log("Categories collection not available, using local only", error);
       }
 
       const newCategories = [...categories, trimmedName];
@@ -411,40 +482,21 @@ export default function Admin() {
     }
 
     try {
-      // Save to database - create or update
       if (categoryIds[oldName]) {
-        try {
-          await databases.updateDocument(
-            APPWRITE_CONFIG.DATABASE_ID,
-            APPWRITE_CONFIG.CATEGORIES_COLLECTION,
-            categoryIds[oldName],
-            { name: trimmedName, emoji: newCategoryEmoji }
-          );
-        } catch (e) {
-          // Try to create if update fails
-          try {
-            await databases.createDocument(
-              APPWRITE_CONFIG.DATABASE_ID,
-              APPWRITE_CONFIG.CATEGORIES_COLLECTION,
-              ID.unique(),
-              { name: trimmedName, emoji: newCategoryEmoji }
-            );
-          } catch (createErr) {
-            console.log("Could not save category to DB");
-          }
+        const { error } = await supabase
+          .from(SUPABASE_CONFIG.CATEGORIES_TABLE)
+          .update({ name: trimmedName, emoji: newCategoryEmoji, updated_at: new Date().toISOString() })
+          .eq("id", categoryIds[oldName]);
+        
+        if (error) {
+          await supabase
+            .from(SUPABASE_CONFIG.CATEGORIES_TABLE)
+            .insert({ name: trimmedName, emoji: newCategoryEmoji, created_at: new Date().toISOString() });
         }
       } else {
-        // Create new category in DB
-        try {
-          await databases.createDocument(
-            APPWRITE_CONFIG.DATABASE_ID,
-            APPWRITE_CONFIG.CATEGORIES_COLLECTION,
-            ID.unique(),
-            { name: trimmedName, emoji: newCategoryEmoji }
-          );
-        } catch (e) {
-          console.log("Could not create category in DB");
-        }
+        await supabase
+          .from(SUPABASE_CONFIG.CATEGORIES_TABLE)
+          .insert({ name: trimmedName, emoji: newCategoryEmoji, created_at: new Date().toISOString() });
       }
 
       // Update category in the list
@@ -462,12 +514,10 @@ export default function Admin() {
       // Update all products with this category
       const productsToUpdate = products.filter(p => p.category === oldName);
       for (const product of productsToUpdate) {
-        await databases.updateDocument(
-          APPWRITE_CONFIG.DATABASE_ID,
-          APPWRITE_CONFIG.PRODUCTS_COLLECTION,
-          product.$id,
-          { category: trimmedName }
-        );
+        await supabase
+          .from(SUPABASE_CONFIG.PRODUCTS_TABLE)
+          .update({ category: trimmedName, updated_at: new Date().toISOString() })
+          .eq("id", product.id);
       }
 
       setNewCategoryName("");
@@ -535,24 +585,34 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 glass-surface border-b border-border/50">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/" className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-muted transition-colors">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div>
-              <h1 className="text-lg font-bold text-foreground">Admin Dashboard</h1>
-              <p className="text-xs text-muted-foreground">
-                {dbStatus === "ready" ? `${stats.total} Products • ${stats.categories} Categories` : dbStatus === "checking" ? "Checking..." : "Setup Required"}
-              </p>
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <Link to="/" className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-muted transition-colors">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+              <div>
+                <h1 className="text-lg font-bold text-foreground">Admin Dashboard</h1>
+                <p className="text-xs text-muted-foreground">
+                  {dbStatus === "ready" ? `${products.length} Products • ${categories.length - 1} Categories` : dbStatus === "checking" ? "Checking..." : "Setup Required"}
+                </p>
+              </div>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Link to="/admin/sales" className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-sm font-semibold flex items-center gap-1.5 shadow-lg shadow-purple-500/20">
-              <BarChart3 className="w-4 h-4" /> Sales Report
+          
+          {/* Admin Buttons - Responsive Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <Link to="/admin/sales" className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20">
+              <BarChart3 className="w-4 h-4" /> Sales
+            </Link>
+            <Link to="/admin/customers" className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20">
+              <Users className="w-4 h-4" /> Customers
+            </Link>
+            <Link to="/admin/orders" className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
+              <ReceiptIndianRupee className="w-4 h-4" /> Orders
             </Link>
             {dbStatus === "ready" && (
-              <button onClick={startNew} className="px-4 py-2 rounded-xl cart-gradient text-white text-sm font-semibold flex items-center gap-1.5 shadow-lg shadow-orange-500/20">
+              <button onClick={startNew} className="px-3 py-2.5 rounded-xl cart-gradient text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20">
                 <Plus className="w-4 h-4" /> Add Product
               </button>
             )}
@@ -735,14 +795,14 @@ export default function Admin() {
               </thead>
               <tbody>
                 {sortedProducts.map((p) => (
-                  <tr key={p.$id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                  <tr key={p.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
                     <td className="p-3">
                       <img src={p.image || "/placeholder.svg"} alt={p.name} className="w-12 h-12 rounded-lg object-cover" />
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-2">
                         <div className={`w-3 h-3 rounded-full ${
-                          p.foodType === "veg" ? "bg-green-500" : p.foodType === "egg" ? "bg-yellow-500" : "bg-red-500"
+                          p.food_type === "veg" ? "bg-green-500" : p.food_type === "egg" ? "bg-yellow-500" : "bg-red-500"
                         }`} />
                         <span className="font-medium text-foreground">{p.name}</span>
                       </div>
@@ -772,7 +832,7 @@ export default function Admin() {
                         <button onClick={() => startEdit(p)} className="w-8 h-8 rounded-lg bg-secondary dark:bg-gray-700 flex items-center justify-center hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors text-foreground">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => handleDelete(p.$id)} className="w-8 h-8 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                        <button onClick={() => handleDelete(p.id)} className="w-8 h-8 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -787,7 +847,7 @@ export default function Admin() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             <AnimatePresence>
               {sortedProducts.map((p, i) => (
-                <motion.div key={p.$id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.03 }}>
+                <motion.div key={p.id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.03 }}>
                   <div className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
                     <div className="relative aspect-square">
                       <img src={p.image || "/placeholder.svg"} alt={p.name} className="w-full h-full object-cover" />
@@ -803,7 +863,7 @@ export default function Admin() {
                     <div className="p-3">
                       <div className="flex items-center gap-2 mb-1">
                         <div className={`w-3 h-3 rounded-full ${
-                          p.foodType === "veg" ? "bg-green-500" : p.foodType === "egg" ? "bg-yellow-500" : "bg-red-500"
+                          p.food_type === "veg" ? "bg-green-500" : p.food_type === "egg" ? "bg-yellow-500" : "bg-red-500"
                         }`} />
                         <p className="font-semibold text-sm text-foreground truncate">{p.name}</p>
                       </div>
@@ -814,7 +874,7 @@ export default function Admin() {
                           <button onClick={() => startEdit(p)} className="w-7 h-7 rounded-lg bg-secondary dark:bg-gray-700 flex items-center justify-center hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors text-foreground">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => handleDelete(p.$id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                          <button onClick={() => handleDelete(p.id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>

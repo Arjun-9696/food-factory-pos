@@ -85,16 +85,24 @@ export function POSHeader({
 
     {/* Text Section */}
     <div className="flex flex-col">
-      <h1 className="text-2xl font-extrabold text-foreground mb-1">
+      <h1 className="text-2xl font-extrabold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
         Food Factory
       </h1>
-
-      <p className="text-[10px] md:text-xs font-medium text-primary uppercase flex items-center justify-between w-full gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-        <span className="flex-1 text-center tracking-[0.33em] md:tracking-[0.15em] ">
-          THE QUALITY TASTE
+       <p className="text-xs md:text-xs font-medium text-primary  flex items-center">
+       {/* <span className="relative flex h-2.5 w-2.5">
+  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
+</span> */}
+        <span className="flex-1 text-center tracking-[0.25em] md:tracking-[0.25em]" style={{ fontFamily: 'Cinzel, serif' }}>
+          The Quality Taste
         </span>
       </p>
+{/* <img
+  src="/decoline.png"
+  alt="decoline"
+  className="w-[84%] h-full brightness-0"
+/> */}
+     
     </div>
 
   </div>

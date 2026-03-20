@@ -60,6 +60,29 @@ export function Lens({
     if (e.key === "Escape") setIsHovering(false)
   }, [])
 
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0]
+    const rect = e.currentTarget.getBoundingClientRect()
+    setMousePosition({
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    })
+    setIsHovering(true)
+  }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0]
+    const rect = e.currentTarget.getBoundingClientRect()
+    setMousePosition({
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    })
+  }, [])
+
+  const handleTouchEnd = useCallback(() => {
+    setIsHovering(false)
+  }, [])
+
   const maskImage = useMotionTemplate`radial-gradient(circle ${
     lensSize / 2
   }px at ${currentPosition.x}px ${
@@ -104,6 +127,9 @@ export function Lens({
       onMouseLeave={() => setIsHovering(false)}
       onMouseMove={handleMouseMove}
       onKeyDown={handleKeyDown}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       role="region"
       aria-label={ariaLabel}
       tabIndex={0}

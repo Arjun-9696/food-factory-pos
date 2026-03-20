@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { type MenuItem } from "@/data/menu"
 import { Search, X, Plus, Minus } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import { toast } from "sonner"
 
 interface SearchResultItemProps {
   item: MenuItem
@@ -21,6 +22,25 @@ function SearchResultItem({ item, quantity, onAdd, onRemove }: SearchResultItemP
   const handleAddClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     onAdd()
+    if (quantity === 0) {
+      toast.success(`${item.name} added to cart!`, { 
+        duration: 2000,
+        style: {
+          background: '#fff',
+          border: '2px solid #ff6b35',
+          boxShadow: '0 0 20px rgba(255, 107, 53, 0.3)',
+        }
+      })
+    } else {
+      toast.success(`+1 ${item.name}`, {
+        duration: 1000,
+        style: {
+          background: "#fff",
+          border: "2px solid #ff6b35",
+          boxShadow: "0 0 15px rgba(255, 107, 53, 0.25)",
+        },
+      })
+    }
   }
 
   const handleRemoveClick = (e: React.MouseEvent) => {
@@ -52,12 +72,13 @@ function SearchResultItem({ item, quantity, onAdd, onRemove }: SearchResultItemP
 
       <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
         {quantity === 0 ? (
-          <button
+          <motion.button
+            whileTap={{ scale: 0.55 }}
             onClick={handleAddClick}
             className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-500 to-red-500 text-white flex items-center justify-center hover:from-orange-600 hover:to-red-600 transition-all shadow-lg shadow-orange-500/25 hover:scale-105 active:scale-95"
           >
             <Plus className="w-5 h-5" />
-          </button>
+          </motion.button>
         ) : (
           <div className="flex items-center gap-1 bg-white dark:bg-gray-700 rounded-full shadow-md border border-border/30">
             <button
@@ -67,12 +88,13 @@ function SearchResultItem({ item, quantity, onAdd, onRemove }: SearchResultItemP
               <Minus className="w-3.5 h-3.5 text-muted-foreground dark:text-gray-400" />
             </button>
             <span className="w-6 text-center text-xs font-bold text-foreground dark:text-white">{quantity}</span>
-            <button
+            <motion.button
+              whileTap={{ scale: 0.55 }}
               onClick={handleAddClick}
               className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-secondary dark:hover:bg-gray-600 transition-colors"
             >
               <Plus className="w-3.5 h-3.5 text-muted-foreground dark:text-gray-400" />
-            </button>
+            </motion.button>
           </div>
         )}
       </div>
