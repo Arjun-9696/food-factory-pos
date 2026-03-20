@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { account } from "@/lib/appwrite";
+import { supabase } from "@/lib/supabaseClient";
 
 interface User {
   id: string;
@@ -33,14 +33,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     checkCurrentUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const isAdminEmail = session.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        setUser({
+          id: session.user.id,
+          email: session.user.email || "",
+          name: session.user.user_metadata?.name || session.user.email?.split("@")[0] || "",
+        });
+        setIsAdmin(isAdminEmail);
+      } else {
+        setUser(null);
+        setIsAdmin(false);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const checkCurrentUser = async () => {
     try {
-      const session = await account.get();
-      const isAdminEmail = session.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-      setUser({ id: session.$id, email: session.email, name: session.name || session.email.split("@")[0] });
-      setIsAdmin(isAdminEmail);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const isAdminEmail = session.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        setUser({
+          id: session.user.id,
+          email: session.user.email || "",
+          name: session.user.user_metadata?.name || session.user.email?.split("@")[0] || "",
+        });
+        setIsAdmin(isAdminEmail);
+      }
     } catch {
       // No session
     }
@@ -49,23 +73,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, name?: string) => {
     try {
-      // Create account
-      await account.create("unique()", email, password, name || email.split("@")[0]);
-      
-      // Create session immediately after signup
-      await account.createEmailPasswordSession(email, password);
-      
-      // Get the created user
-      const session = await account.get();
-      const isAdminEmail = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-      setUser({ id: session.$id, email: session.email, name: session.name || name || email.split("@")[0] });
-      setIsAdmin(isAdminEmail);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name || email.split("@")[0],
+          },
+        },
+      });
 
-      return { error: null };
+      if (error) throw error;
+
+      if (data.user) {
+        const isAdminEmail = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        setUser({
+          id: data.user.id,
+          email: data.user.email || email,
+          name: name || email.split("@")[0],
+        });
+        setIsAdmin(isAdminEmail);
+        return { error: null };
+      }
+
+      return { error: "Signup failed. Please try again." };
     } catch (error: any) {
       console.error("Signup error:", error);
-      // Check if user already exists
-      if (error.code === 409 || error.message?.includes("already exists")) {
+      if (error.message?.includes("rate limit") || error.code === "429") {
+        return { error: "Too many attempts. Please wait 5 minutes and try again." };
+      }
+      if (error.message?.includes("already registered") || error.code === "user_already_exists") {
         return { error: "An account with this email already exists. Please sign in instead." };
       }
       return { error: error.message || "Signup failed. Please try again." };
@@ -74,22 +111,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      await account.createEmailPasswordSession(email, password);
-      const session = await account.get();
-      
-      const isAdminEmail = session.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-      setUser({ id: session.$id, email: session.email, name: session.name || email.split("@")[0] });
-      setIsAdmin(isAdminEmail);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      return { error: null };
+      if (error) throw error;
+
+      if (data.user) {
+        const isAdminEmail = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        setUser({
+          id: data.user.id,
+          email: data.user.email || email,
+          name: data.user.user_metadata?.name || email.split("@")[0],
+        });
+        setIsAdmin(isAdminEmail);
+        return { error: null };
+      }
+
+      return { error: "Login failed. Please try again." };
     } catch (error: any) {
       console.error("Login error:", error);
-      // Check for specific error codes
-      if (error.code === 401 || error.message?.includes("Invalid credentials")) {
+      if (error.message?.includes("rate limit") || error.code === "429") {
+        return { error: "Too many attempts. Please wait 5 minutes and try again." };
+      }
+      if (error.message?.includes("Invalid login credentials") || error.status === 400) {
         return { error: "Invalid email or password. Please try again." };
       }
-      if (error.code === 429) {
-        return { error: "Too many attempts. Please wait a moment and try again." };
+      if (error.message?.includes("Email not confirmed")) {
+        return { error: "Please confirm your email first." };
       }
       return { error: error.message || "Login failed. Please try again." };
     }
@@ -97,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
-      await account.deleteSession("current");
+      await supabase.auth.signOut();
     } catch {}
     setUser(null);
     setIsAdmin(false);

@@ -1,0 +1,16 @@
+{
+  "appId": "com.foodfactory.app",
+  "appName": "Food Factory",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 3000,
+      "launchAutoHide": true,
+      "backgroundColor": "#ea580c",
+      "showSpinner": false
+    }
+  }
+}

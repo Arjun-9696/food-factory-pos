@@ -9,6 +9,7 @@ import { useTheme } from "next-themes"
 import { MagicCard } from "@/components/magicui/magic-card"
 import { Lens } from "../ui/lens"
 import { motion, AnimatePresence } from "framer-motion"
+import { getOptimizedImageUrl } from "@/lib/uploadImage"
 
 interface ProductCardProps {
   item: MenuItem
@@ -177,13 +178,13 @@ export function ProductCard({ item, onAddPosition }: ProductCardProps) {
           ariaLabel="Zoom Area"
         >
   <img
-  src={item.image}
+  src={getOptimizedImageUrl(item.image, 400)}
   alt={item.name}
   loading="lazy"
   onLoad={() => setImgLoaded(true)}
   onError={(e) => {
     (e.target as HTMLImageElement).src =
-      "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop&q=80"
+    "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop&q=80"
   }}
   className={`
     w-full h-full object-cover 
@@ -228,7 +229,7 @@ export function ProductCard({ item, onAddPosition }: ProductCardProps) {
   </div>
 
   {/* Content */}
- <div className="p-4 relative z-10 
+ <div className="py-4 px-2 relative z-10 
   bg-black/5 dark:bg-transparent
   backdrop-blur-lg 
   rounded-b-xl group-hover:rounded-b-xl
@@ -257,15 +258,12 @@ export function ProductCard({ item, onAddPosition }: ProductCardProps) {
       </div>
 
       {/* Price + Add */}
-      <div className="flex items-center justify-between mt-1 ">
-
+      <div className="flex items-center justify-between mt-1 min-h-[40px] gap-1">
         <div className="flex flex-col">
-         
-          <span className="text-2xl md:text-2xl font-extrabold text-orange-600 dark:text-orange-400">
+          <span className="text-sm md:text-2xl  whitespace-nowrap flex-shrink-0 font-extrabold text-orange-600 dark:text-orange-400">
             ₹ {item.price}
           </span>
         </div>
-
         <AnimatePresence mode="popLayout">
           {qty === 0 ? (
             <motion.button
@@ -277,7 +275,7 @@ export function ProductCard({ item, onAddPosition }: ProductCardProps) {
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleAdd}
-              className="relative px-4 md:px-6 py-2 md:py-[10px] rounded-full text-sm font-bold 
+              className="relative px-8 md:px-6 py-2 md:py-[10px] rounded-full text-sm font-bold 
               bg-gradient-to-r from-orange-500 via-orange-500 to-amber-500 
               text-white shadow-lg shadow-orange-500/30 
               hover:shadow-orange-500/50 overflow-hidden group"
@@ -293,28 +291,28 @@ export function ProductCard({ item, onAddPosition }: ProductCardProps) {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.5, opacity: 0 }}
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              className="flex items-center gap-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md 
+              className="flex items-center  gap-0 md:gap-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md 
               rounded-full  shadow-lg border border-white/20"
             >
               <motion.button
-                whileTap={{ scale: 0.85 }}
+                whileTap={{ scale: 0.55 }}
                 onClick={() => updateQuantity(item.id, qty - 1)}
-                className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center 
+                className="w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center 
                 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-sm 
                 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all shadow-sm"
               >
-                <Minus className="w-3.5 h-3.5 text-muted-foreground dark:text-gray-400" />
+                <Minus className="w-5 h-5 text-muted-foreground dark:text-gray-400" />
               </motion.button>
 
               <motion.span
                 layout
-                className="text-sm font-bold text-orange-600 dark:text-orange-400 w-4 md:w-7 text-center"
+                className="text-base font-bold text-orange-600 dark:text-orange-400 w-8 text-center"
               >
                 {qty}
               </motion.span>
 
               <motion.button
-                whileTap={{ scale: 0.85 }}
+                whileTap={{ scale: 0.55 }}
                 onClick={() => {
                   updateQuantity(item.id, qty + 1)
                   toast.success(`+1 ${item.name}`, {
@@ -326,11 +324,11 @@ export function ProductCard({ item, onAddPosition }: ProductCardProps) {
                     },
                   })
                 }}
-                className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center 
+                className="w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center 
                 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-sm 
                 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all shadow-sm"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-5 h-5" />
               </motion.button>
             </motion.div>
           )}

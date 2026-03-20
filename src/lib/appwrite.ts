@@ -4,7 +4,7 @@ const PROJECT_ID = import.meta.env.VITE_APPWRITE_PROJECT_ID || "69a4a8c0000576de
 const ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT || "https://nyc.cloud.appwrite.io/v1";
 const STORAGE_BUCKET_ID = import.meta.env.VITE_APPWRITE_STORAGE_ID || "product-images";
 
-const DATABASE_ID = "food-factory-pos";
+const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || "food-factory-pos";
 const USERS_COLLECTION = "users";
 const PRODUCTS_COLLECTION = "products";
 const ORDERS_COLLECTION = "orders";

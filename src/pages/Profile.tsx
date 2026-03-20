@@ -1,297 +1,332 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { databases, APPWRITE_CONFIG } from "@/lib/appwrite";
-import { ID, Query } from "appwrite";
-import { Link, useSearchParams } from "react-router-dom";
+import { supabase, SUPABASE_CONFIG } from "@/lib/supabaseClient";
+import { Link } from "react-router-dom";
 import { 
   ArrowLeft, 
   User, 
   MapPin, 
-  Plus, 
-  Pencil, 
-  Trash2, 
   Save, 
-  X, 
   Loader2,
   Phone,
   Mail,
   Home,
   Building,
-  Star
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  Edit3,
+  Check,
+  X,
+  Locate,
+  Navigation
 } from "lucide-react";
 import { toast } from "sonner";
 import { MobileNav } from "@/components/pos/MobileNav";
 import { CartDrawer } from "@/components/pos/CartDrawer";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { motion, AnimatePresence } from "framer-motion";
+import { useTheme } from "next-themes";
 
-interface Address {
-  $id: string;
-  label: string;
-  fullAddress: string;
-  city: string;
-  state: string;
-  pincode: string;
-  phone: string;
-  isDefault: boolean;
-}
-
-interface Profile {
-  $id: string;
-  phone: string;
-  alternatePhone?: string;
-  dateOfBirth?: string;
+interface ProfileData {
+  id: string;
+  user_id: string;
+  full_name?: string;
+  phone?: string;
+  email?: string;
   gender?: string;
+  dob?: string;
+  house_number?: string;
+  street?: string;
+  area?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+  full_address?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export default function Profile() {
   const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "profile";
+  const { theme } = useTheme();
   const [cartOpen, setCartOpen] = useState(false);
-
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<string | null>("personal");
 
-  // Profile form
-  const [profileForm, setProfileForm] = useState({
+  const [formData, setFormData] = useState({
+    name: "",
     phone: "",
-    alternatePhone: "",
-    dateOfBirth: "",
     gender: "prefer_not_to_say",
-  });
-
-  // Address form
-  const [showAddressForm, setShowAddressForm] = useState(false);
-  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
-  const [addressForm, setAddressForm] = useState({
-    label: "Home",
-    fullAddress: "",
+    dateOfBirth: "",
+    houseNumber: "",
+    street: "",
+    area: "",
     city: "",
     state: "",
-    pincode: "",
-    phone: "",
-    isDefault: false,
+    postalCode: "",
+    country: "India",
+    latitude: 0,
+    longitude: 0,
+    fullAddress: "",
   });
 
   useEffect(() => {
     if (user) {
       fetchProfile();
-      fetchAddresses();
     }
   }, [user]);
 
   const fetchProfile = async () => {
     try {
-      const response = await databases.listDocuments(
-        APPWRITE_CONFIG.DATABASE_ID,
-        APPWRITE_CONFIG.PROFILES_COLLECTION,
-        [Query.equal("userId", user!.id)]
-      );
-      if (response.documents.length > 0) {
-        const doc = response.documents[0] as any;
-        setProfile(doc);
-        setProfileForm({
-          phone: doc.phone || "",
-          alternatePhone: doc.alternatePhone || "",
-          dateOfBirth: doc.dateOfBirth || "",
-          gender: doc.gender || "prefer_not_to_say",
+      console.log("Fetching profile for user:", user?.id);
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user!.id)
+        .single();
+      
+      console.log("Profile fetch result:", data, error);
+      
+      if (data) {
+        setProfile(data);
+        setFormData({
+          name: data.full_name || data.name || user?.name || "",
+          phone: data.phone || "",
+          gender: data.gender || "prefer_not_to_say",
+          dateOfBirth: data.dob || data.date_of_birth || "",
+          houseNumber: data.house_number || "",
+          street: data.street || "",
+          area: data.area || "",
+          city: data.city || "",
+          state: data.state || "",
+          postalCode: data.postal_code || "",
+          country: data.country || "India",
+          latitude: data.latitude || 0,
+          longitude: data.longitude || 0,
+          fullAddress: data.full_address || "",
         });
+      } else if (error?.message?.includes("No rows") || !data) {
+        console.log("No profile found, creating one...");
+        await createProfile();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error fetching profile:", error);
-    }
-  };
-
-  const fetchAddresses = async () => {
-    try {
-      const response = await databases.listDocuments(
-        APPWRITE_CONFIG.DATABASE_ID,
-        APPWRITE_CONFIG.ADDRESSES_COLLECTION,
-        [Query.equal("userId", user!.id), Query.orderDesc("isDefault")]
-      );
-      setAddresses(response.documents as any);
-    } catch (error) {
-      console.error("Error fetching addresses:", error);
+      // Try to create profile on error
+      await createProfile();
     } finally {
       setLoading(false);
     }
   };
 
+  const createProfile = async () => {
+    try {
+      const now = new Date().toISOString();
+      console.log("Creating profile for user...");
+      const { data, error } = await supabase
+        .from("profiles")
+        .insert({
+          user_id: user!.id,
+          full_name: user?.name || "",
+          email: user?.email || "",
+          created_at: now,
+          updated_at: now,
+        })
+        .select()
+        .single();
+      
+      console.log("Profile create result:", data, error);
+      
+      if (data) {
+        setProfile(data);
+        toast.success("Profile created!");
+      } else if (error) {
+        console.error("Error creating profile:", error);
+        // Try to fetch existing profile
+        fetchProfile();
+      }
+    } catch (error: unknown) {
+      console.error("Error creating profile:", error);
+      // Try to fetch on error
+      fetchProfile();
+    }
+  };
+
   const saveProfile = async () => {
-    if (!profileForm.phone.trim()) {
+    if (!formData.phone.trim()) {
       toast.error("Phone number is required");
       return;
     }
 
     setSaving(true);
     try {
-      const data = {
-        userId: user!.id,
-        phone: profileForm.phone.trim(),
-        alternatePhone: profileForm.alternatePhone?.trim() || "",
-        dateOfBirth: profileForm.dateOfBirth || "",
-        gender: profileForm.gender,
-      };
+      const fullAddress = [
+        formData.houseNumber,
+        formData.street,
+        formData.area,
+        formData.city,
+        formData.state,
+        formData.postalCode,
+        formData.country,
+      ].filter(Boolean).join(", ");
 
-      if (profile) {
-        await databases.updateDocument(
-          APPWRITE_CONFIG.DATABASE_ID,
-          APPWRITE_CONFIG.PROFILES_COLLECTION,
-          profile.$id,
-          data
-        );
-        toast.success("Profile updated!");
+      const now = new Date().toISOString();
+      
+      // Check if profile exists first
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      
+      if (existingProfile) {
+        console.log("Updating existing profile...");
+        const { error } = await supabase
+          .from("profiles")
+          .update({
+            full_name: formData.name.trim() || user?.name || "",
+            email: user?.email || "",
+            phone: formData.phone.trim(),
+            gender: formData.gender,
+            dob: formData.dateOfBirth || null,
+            house_number: formData.houseNumber.trim() || "",
+            street: formData.street.trim() || "",
+            area: formData.area.trim() || "",
+            city: formData.city.trim() || "",
+            state: formData.state.trim() || "",
+            postal_code: formData.postalCode.trim() || "",
+            country: formData.country.trim() || "",
+            latitude: formData.latitude || 0,
+            longitude: formData.longitude || 0,
+            full_address: fullAddress,
+            updated_at: now,
+          })
+          .eq("user_id", user!.id);
+        
+        if (error) {
+          console.error("Update error:", error);
+          toast.error(error.message || "Failed to update profile");
+        } else {
+          toast.success("Profile updated!");
+          fetchProfile();
+        }
       } else {
-        const newProfile = await databases.createDocument(
-          APPWRITE_CONFIG.DATABASE_ID,
-          APPWRITE_CONFIG.PROFILES_COLLECTION,
-          ID.unique(),
-          data
-        );
-        setProfile(newProfile as any);
-        toast.success("Profile saved!");
+        console.log("Inserting new profile...");
+        const { error } = await supabase
+          .from("profiles")
+          .insert({
+            user_id: user!.id,
+            full_name: formData.name.trim() || user?.name || "",
+            email: user?.email || "",
+            phone: formData.phone.trim(),
+            gender: formData.gender,
+            dob: formData.dateOfBirth || null,
+            house_number: formData.houseNumber.trim() || "",
+            street: formData.street.trim() || "",
+            area: formData.area.trim() || "",
+            city: formData.city.trim() || "",
+            state: formData.state.trim() || "",
+            postal_code: formData.postalCode.trim() || "",
+            country: formData.country.trim() || "",
+            latitude: formData.latitude || 0,
+            longitude: formData.longitude || 0,
+            full_address: fullAddress,
+            created_at: now,
+            updated_at: now,
+          });
+        
+        if (error) {
+          console.error("Insert error:", error);
+          toast.error(error.message || "Failed to save profile");
+        } else {
+          toast.success("Profile saved!");
+          fetchProfile();
+        }
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to save profile");
+    } catch (error: unknown) {
+      console.error("Error saving profile:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to save";
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }
   };
 
-  const resetAddressForm = () => {
-    setAddressForm({
-      label: "Home",
-      fullAddress: "",
-      city: "",
-      state: "",
-      pincode: "",
-      phone: "",
-      isDefault: false,
-    });
-    setEditingAddressId(null);
-    setShowAddressForm(false);
-  };
-
-  const saveAddress = async () => {
-    if (!addressForm.fullAddress.trim() || !addressForm.city.trim() || !addressForm.pincode.trim()) {
-      toast.error("Please fill in all required fields");
+  const getCurrentLocation = useCallback(async () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
       return;
     }
 
-    setSaving(true);
-    try {
-      const data = {
-        userId: user!.id,
-        label: addressForm.label,
-        fullAddress: addressForm.fullAddress.trim(),
-        city: addressForm.city.trim(),
-        state: addressForm.state.trim(),
-        pincode: addressForm.pincode.trim(),
-        phone: addressForm.phone.trim() || profileForm.phone,
-        isDefault: addressForm.isDefault,
-      };
-
-      if (addressForm.isDefault) {
-        for (const addr of addresses) {
-          if (addr.isDefault) {
-            await databases.updateDocument(
-              APPWRITE_CONFIG.DATABASE_ID,
-              APPWRITE_CONFIG.ADDRESSES_COLLECTION,
-              addr.$id,
-              { isDefault: false }
-            );
-          }
-        }
-      }
-
-      if (editingAddressId) {
-        await databases.updateDocument(
-          APPWRITE_CONFIG.DATABASE_ID,
-          APPWRITE_CONFIG.ADDRESSES_COLLECTION,
-          editingAddressId,
-          data
-        );
-        toast.success("Address updated!");
-      } else {
-        await databases.createDocument(
-          APPWRITE_CONFIG.DATABASE_ID,
-          APPWRITE_CONFIG.ADDRESSES_COLLECTION,
-          ID.unique(),
-          data
-        );
-        toast.success("Address added!");
-      }
-      
-      resetAddressForm();
-      fetchAddresses();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to save address");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteAddress = async (id: string) => {
-    if (!confirm("Delete this address?")) return;
+    setGettingLocation(true);
     
     try {
-      await databases.deleteDocument(
-        APPWRITE_CONFIG.DATABASE_ID,
-        APPWRITE_CONFIG.ADDRESSES_COLLECTION,
-        id
-      );
-      toast.success("Address deleted!");
-      fetchAddresses();
-    } catch (error) {
-      toast.error("Failed to delete address");
-    }
-  };
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        });
+      });
 
-  const setDefaultAddress = async (address: Address) => {
-    try {
-      for (const addr of addresses) {
-        if (addr.isDefault) {
-          await databases.updateDocument(
-            APPWRITE_CONFIG.DATABASE_ID,
-            APPWRITE_CONFIG.ADDRESSES_COLLECTION,
-            addr.$id,
-            { isDefault: false }
-          );
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+
+      setFormData(prev => ({
+        ...prev,
+        latitude: lat,
+        longitude: lng,
+      }));
+
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+        );
+        const data = await response.json();
+
+        if (data.address) {
+          setFormData(prev => ({
+            ...prev,
+            houseNumber: data.address.house_number || prev.houseNumber,
+            street: data.address.road || prev.street,
+            area: data.address.suburb || data.address.neighbourhood || prev.area,
+            city: data.address.city || data.address.town || data.address.village || prev.city,
+            state: data.address.state || prev.state,
+            postalCode: data.address.postcode || prev.postalCode,
+            country: data.address.country || prev.country,
+          }));
+          toast.success("Location detected!");
         }
+      } catch {
+        toast.success(`Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
       }
-      await databases.updateDocument(
-        APPWRITE_CONFIG.DATABASE_ID,
-        APPWRITE_CONFIG.ADDRESSES_COLLECTION,
-        address.$id,
-        { isDefault: true }
-      );
-      toast.success("Default address updated!");
-      fetchAddresses();
-    } catch (error) {
-      toast.error("Failed to set default address");
+    } catch (error: unknown) {
+      const err = error as GeolocationPositionError;
+      if (err.code === err.PERMISSION_DENIED) {
+        toast.error("Location permission denied. Please enable location access.");
+      } else if (err.code === err.POSITION_UNAVAILABLE) {
+        toast.error("Location information unavailable.");
+      } else if (err.code === err.TIMEOUT) {
+        toast.error("Location request timed out.");
+      } else {
+        toast.error("Failed to get location.");
+      }
+    } finally {
+      setGettingLocation(false);
     }
+  }, []);
+
+  const updateFormField = (field: string, value: string | number) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const editAddress = (addr: Address) => {
-    setAddressForm({
-      label: addr.label,
-      fullAddress: addr.fullAddress,
-      city: addr.city,
-      state: addr.state,
-      pincode: addr.pincode,
-      phone: addr.phone,
-      isDefault: addr.isDefault,
-    });
-    setEditingAddressId(addr.$id);
-    setShowAddressForm(true);
+  const toggleSection = (section: string) => {
+    setExpandedSection(expandedSection === section ? null : section);
   };
 
   if (!user) {
@@ -302,319 +337,319 @@ export default function Profile() {
     );
   }
 
+  const isDark = theme === "dark" || (!theme && typeof window !== "undefined" && document.documentElement.classList.contains("dark"));
+
+  const inputBg = isDark ? "bg-gray-800/50" : "bg-white/50";
+  const cardBg = isDark ? "bg-gray-900/50" : "bg-white/50";
+  const borderColor = isDark ? "border-gray-700/50" : "border-gray-200";
+  const textPrimary = isDark ? "text-white" : "text-gray-900";
+  const textSecondary = isDark ? "text-gray-400" : "text-gray-600";
+
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 glass-surface border-b border-border/50">
+      <header className={`sticky top-0 z-40 ${isDark ? "bg-gray-900/95" : "bg-white/95"} backdrop-blur-lg ${borderColor} border-b`}>
         <div className="container mx-auto px-4 py-3 flex items-center gap-3">
-          <Link to="/" className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center">
-            <ArrowLeft className="w-5 h-5 text-muted-foreground dark:text-gray-400" />
+          <Link to="/" className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
+            <ArrowLeft className={`w-5 h-5 ${textSecondary}`} />
           </Link>
           <div>
-            <h1 className="text-lg font-bold text-foreground">My Profile</h1>
-            <p className="text-xs text-muted-foreground">Manage your account</p>
+            <h1 className={`text-lg font-bold ${textPrimary}`}>My Profile</h1>
+            <p className={`text-xs ${textSecondary}`}>Manage your account</p>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-4 pb-40">
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setSearchParams({ tab: "profile" })}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-              activeTab === "profile" 
-                ? "cart-gradient text-primary-foreground" 
-                : "bg-secondary text-foreground hover:bg-secondary/80"
-            }`}
-          >
-            <User className="w-4 h-4 inline mr-2 text-muted-foreground dark:text-gray-400" />
-            Profile
-          </button>
-          <button
-            onClick={() => setSearchParams({ tab: APPWRITE_CONFIG.ADDRESSES_COLLECTION })}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-              activeTab === APPWRITE_CONFIG.ADDRESSES_COLLECTION 
-                ? "cart-gradient text-primary-foreground" 
-                : "bg-secondary text-foreground hover:bg-secondary/80"
-            }`}
-          >
-            <MapPin className="w-4 h-4 inline mr-2 text-muted-foreground dark:text-gray-400" />
-            Addresses
-          </button>
-        </div>
-
+      <main className="container mx-auto px-4 py-4 pb-32">
         {loading ? (
-          <div className="flex justify-center py-10">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
           </div>
-        ) : activeTab === "profile" ? (
-          <div className="max-w-xl">
-            <div className="glass-card rounded-xl p-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-2xl font-bold">
-                  {user.name?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
+        ) : (
+          <div className="max-w-2xl mx-auto space-y-4">
+            {/* Profile Header Card */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`${cardBg} backdrop-blur-lg ${borderColor} border rounded-2xl p-6`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-orange-500/30">
+                  {formData.name?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-foreground">{user.name || "User"}</h2>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Mail className="w-3 h-3" /> {user.email}
+                <div className="flex-1">
+                  <h2 className={`text-xl font-bold ${textPrimary}`}>{formData.name || "Your Name"}</h2>
+                  <p className={`text-sm ${textSecondary} flex items-center gap-1`}>
+                    <Mail className="w-3.5 h-3.5" /> {user.email}
+                  </p>
+                  <p className={`text-sm ${textSecondary} flex items-center gap-1 mt-1`}>
+                    <Phone className="w-3.5 h-3.5" /> {formData.phone || "Add phone"}
                   </p>
                 </div>
               </div>
+            </motion.div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Phone Number *</label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input
-                      type="tel"
-                      placeholder="Enter phone number"
-                      value={profileForm.phone}
-                      onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Alternate Phone</label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input
-                      type="tel"
-                      placeholder="Alternate phone (optional)"
-                      value={profileForm.alternatePhone}
-                      onChange={(e) => setProfileForm({ ...profileForm, alternatePhone: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">Date of Birth</label>
-                    <input
-                      type="date"
-                      value={profileForm.dateOfBirth}
-                      onChange={(e) => setProfileForm({ ...profileForm, dateOfBirth: e.target.value })}
-                      className="w-full px-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">Gender</label>
-                    <Select value={profileForm.gender} onValueChange={(value) => setProfileForm({ ...profileForm, gender: value })}>
-                      <SelectTrigger className="w-full bg-secondary border-border/50">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <button
-                  onClick={saveProfile}
-                  disabled={saving}
-                  className="w-full py-3 rounded-xl cart-gradient text-primary-foreground font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Save Profile
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="max-w-xl">
-            {/* Add Address Button */}
-            {!showAddressForm && (
+            {/* Personal Details Section */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className={`${cardBg} backdrop-blur-lg ${borderColor} border rounded-2xl overflow-hidden`}
+            >
               <button
-                onClick={() => setShowAddressForm(true)}
-                className="w-full py-3 rounded-xl border-2 border-dashed border-border/50 text-muted-foreground font-medium flex items-center justify-center gap-2 hover:border-primary hover:text-primary transition-colors mb-4"
+                onClick={() => toggleSection("personal")}
+                className={`w-full p-4 flex items-center justify-between ${isDark ? "hover:bg-gray-800/50" : "hover:bg-gray-50"} transition-colors`}
               >
-                <Plus className="w-4 h-4" />
-                Add New Address
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                    <User className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className={`font-semibold ${textPrimary}`}>Personal Details</h3>
+                    <p className={`text-xs ${textSecondary}`}>Name, phone, gender, DOB</p>
+                  </div>
+                </div>
+                {expandedSection === "personal" ? (
+                  <ChevronUp className={`w-5 h-5 ${textSecondary}`} />
+                ) : (
+                  <ChevronDown className={`w-5 h-5 ${textSecondary}`} />
+                )}
               </button>
-            )}
 
-            {/* Address Form */}
-            {showAddressForm && (
-              <div className="glass-card rounded-xl p-6 mb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-foreground">{editingAddressId ? "Edit Address" : "Add New Address"}</h3>
-                  <button onClick={resetAddressForm} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center text-foreground">
-                    <X className="w-4 h-4 text-muted-foreground dark:text-gray-400" />
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">Label</label>
-                    <div className="flex gap-2">
-                      {["Home", "Work", "Other"].map((label) => (
-                        <button
-                          key={label}
-                          onClick={() => setAddressForm({ ...addressForm, label })}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            addressForm.label === label
-                              ? "cart-gradient text-primary-foreground"
-                              : "bg-secondary text-foreground"
-                          }`}
-                        >
-                          {label === "Home" && <Home className="w-3 h-3 inline mr-1" />}
-                          {label === "Work" && <Building className="w-3 h-3 inline mr-1" />}
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">Full Address *</label>
-                    <textarea
-                      placeholder="Street address, landmark..."
-                      value={addressForm.fullAddress}
-                      onChange={(e) => setAddressForm({ ...addressForm, fullAddress: e.target.value })}
-                      className="w-full px-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground resize-none h-20"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1 block">City *</label>
-                      <input
-                        type="text"
-                        placeholder="City"
-                        value={addressForm.city}
-                        onChange={(e) => setAddressForm({ ...addressForm, city: e.target.value })}
-                        className="w-full px-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1 block">State</label>
-                      <input
-                        type="text"
-                        placeholder="State"
-                        value={addressForm.state}
-                        onChange={(e) => setAddressForm({ ...addressForm, state: e.target.value })}
-                        className="w-full px-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1 block">Pincode *</label>
-                      <input
-                        type="text"
-                        placeholder="PIN code"
-                        value={addressForm.pincode}
-                        onChange={(e) => setAddressForm({ ...addressForm, pincode: e.target.value })}
-                        className="w-full px-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1 block">Phone</label>
-                      <input
-                        type="tel"
-                        placeholder="Contact number"
-                        value={addressForm.phone}
-                        onChange={(e) => setAddressForm({ ...addressForm, phone: e.target.value })}
-                        className="w-full px-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground"
-                      />
-                    </div>
-                  </div>
-
-                  <label className="flex items-center gap-2 text-sm text-foreground">
-                    <input
-                      type="checkbox"
-                      checked={addressForm.isDefault}
-                      onChange={(e) => setAddressForm({ ...addressForm, isDefault: e.target.checked })}
-                      className="w-4 h-4 rounded"
-                    />
-                    Set as default address
-                  </label>
-
-                  <button
-                    onClick={saveAddress}
-                    disabled={saving}
-                    className="w-full py-3 rounded-xl cart-gradient text-primary-foreground font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+              <AnimatePresence>
+                {expandedSection === "personal" && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
                   >
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    {editingAddressId ? "Update Address" : "Save Address"}
-                  </button>
-                </div>
-              </div>
-            )}
+                    <div className={`px-4 pb-4 space-y-4`}>
+                      <div>
+                        <label className={`text-sm font-medium ${textSecondary} mb-1.5 block`}>Full Name</label>
+                        <input
+                          type="text"
+                          value={formData.name}
+                          onChange={(e) => updateFormField("name", e.target.value)}
+                          placeholder="Enter your name"
+                          className={`w-full px-4 py-3 rounded-xl ${inputBg} ${borderColor} border text-sm ${textPrimary} placeholder:${textSecondary} focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                        />
+                      </div>
 
-            {/* Address List */}
-            <div className="space-y-3">
-              {addresses.length === 0 && !showAddressForm ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <MapPin className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p>No addresses saved</p>
-                  <p className="text-sm text-foreground">Add an address for faster checkout</p>
-                </div>
-              ) : (
-                addresses.map((addr) => (
-                  <div key={addr.$id} className="glass-card rounded-xl p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          addr.isDefault ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
-                        }`}>
-                          {addr.label === "Home" ? <Home className="w-5 h-5" /> : <Building className="w-5 h-5" />}
+                      <div>
+                        <label className={`text-sm font-medium ${textSecondary} mb-1.5 block`}>Phone Number *</label>
+                        <div className="relative">
+                          <Phone className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${textSecondary}`} />
+                          <input
+                            type="tel"
+                            value={formData.phone}
+                            onChange={(e) => updateFormField("phone", e.target.value)}
+                            placeholder="Enter phone number"
+                            className={`w-full pl-10 pr-4 py-3 rounded-xl ${inputBg} ${borderColor} border text-sm ${textPrimary} placeholder:${textSecondary} focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className={`text-sm font-medium ${textSecondary} mb-1.5 block`}>Gender</label>
+                          <select
+                            value={formData.gender}
+                            onChange={(e) => updateFormField("gender", e.target.value)}
+                            className={`w-full px-4 py-3 rounded-xl ${inputBg} ${borderColor} border text-sm ${textPrimary} focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                          >
+                            <option value="prefer_not_to_say">Prefer not to say</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                          </select>
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold">{addr.label}</p>
-                            {addr.isDefault && (
-                              <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">Default</span>
-                            )}
+                          <label className={`text-sm font-medium ${textSecondary} mb-1.5 block`}>Date of Birth</label>
+                          <div className="relative">
+                            <Calendar className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${textSecondary}`} />
+                            <input
+                              type="date"
+                              value={formData.dateOfBirth}
+                              onChange={(e) => updateFormField("dateOfBirth", e.target.value)}
+                              className={`w-full pl-10 pr-4 py-3 rounded-xl ${inputBg} ${borderColor} border text-sm ${textPrimary} focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                            />
                           </div>
-                          <p className="text-sm text-foreground">{addr.fullAddress}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {addr.city}{addr.state ? `, ${addr.state}` : ""} - {addr.pincode}
-                          </p>
-                          {addr.phone && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                              <Phone className="w-3 h-3" /> {addr.phone}
-                            </p>
-                          )}
                         </div>
                       </div>
-                      <div className="flex gap-1">
-                        {!addr.isDefault && (
-                          <button
-                            onClick={() => setDefaultAddress(addr)}
-                            className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground hover:text-primary"
-                            title="Set as default"
-                          >
-                            <Star className="w-3.5 h-3.5" />
-                          </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+            {/* Delivery Address Section */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className={`${cardBg} backdrop-blur-lg ${borderColor} border rounded-2xl overflow-hidden`}
+            >
+              <button
+                onClick={() => toggleSection("address")}
+                className={`w-full p-4 flex items-center justify-between ${isDark ? "hover:bg-gray-800/50" : "hover:bg-gray-50"} transition-colors`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                    <Home className="w-5 h-5 text-green-500" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className={`font-semibold ${textPrimary}`}>Delivery Address</h3>
+                    <p className={`text-xs ${textSecondary}`}>
+                      {formData.fullAddress ? `${formData.fullAddress.substring(0, 40)}...` : "Add delivery address"}
+                    </p>
+                  </div>
+                </div>
+                {expandedSection === "address" ? (
+                  <ChevronUp className={`w-5 h-5 ${textSecondary}`} />
+                ) : (
+                  <ChevronDown className={`w-5 h-5 ${textSecondary}`} />
+                )}
+              </button>
+
+              <AnimatePresence>
+                {expandedSection === "address" && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-4 pb-4 space-y-4">
+                      {/* Location Button */}
+                      <button
+                        onClick={getCurrentLocation}
+                        disabled={gettingLocation}
+                        className={`w-full py-3 rounded-xl border-2 ${
+                          gettingLocation 
+                            ? "border-orange-300 bg-orange-50" 
+                            : "border-orange-500 bg-orange-50 hover:bg-orange-100"
+                        } text-orange-600 font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50`}
+                      >
+                        {gettingLocation ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Locate className="w-4 h-4" />
                         )}
-                        <button
-                          onClick={() => editAddress(addr)}
-                          className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => deleteAddress(addr.$id)}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-destructive"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {gettingLocation ? "Detecting Location..." : "Use Current Location"}
+                      </button>
+
+                      {/* Latitude/Longitude Display */}
+                      {(formData.latitude !== 0 || formData.longitude !== 0) && (
+                        <div className={`p-3 rounded-xl ${inputBg} ${borderColor} border`}>
+                          <p className={`text-xs ${textSecondary} flex items-center gap-1`}>
+                            <Navigation className="w-3 h-3" />
+                            Coordinates: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className={`text-sm font-medium ${textSecondary} mb-1.5 block`}>House/Flat No.</label>
+                          <input
+                            type="text"
+                            value={formData.houseNumber}
+                            onChange={(e) => updateFormField("houseNumber", e.target.value)}
+                            placeholder="A-101"
+                            className={`w-full px-4 py-3 rounded-xl ${inputBg} ${borderColor} border text-sm ${textPrimary} placeholder:${textSecondary} focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`text-sm font-medium ${textSecondary} mb-1.5 block`}>Street</label>
+                          <input
+                            type="text"
+                            value={formData.street}
+                            onChange={(e) => updateFormField("street", e.target.value)}
+                            placeholder="Main Road"
+                            className={`w-full px-4 py-3 rounded-xl ${inputBg} ${borderColor} border text-sm ${textPrimary} placeholder:${textSecondary} focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className={`text-sm font-medium ${textSecondary} mb-1.5 block`}>Area/Locality</label>
+                        <input
+                          type="text"
+                          value={formData.area}
+                          onChange={(e) => updateFormField("area", e.target.value)}
+                          placeholder="Near mall, market area"
+                          className={`w-full px-4 py-3 rounded-xl ${inputBg} ${borderColor} border text-sm ${textPrimary} placeholder:${textSecondary} focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className={`text-sm font-medium ${textSecondary} mb-1.5 block`}>City *</label>
+                          <input
+                            type="text"
+                            value={formData.city}
+                            onChange={(e) => updateFormField("city", e.target.value)}
+                            placeholder="City"
+                            required
+                            className={`w-full px-4 py-3 rounded-xl ${inputBg} ${borderColor} border text-sm ${textPrimary} placeholder:${textSecondary} focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`text-sm font-medium ${textSecondary} mb-1.5 block`}>State</label>
+                          <input
+                            type="text"
+                            value={formData.state}
+                            onChange={(e) => updateFormField("state", e.target.value)}
+                            placeholder="State"
+                            className={`w-full px-4 py-3 rounded-xl ${inputBg} ${borderColor} border text-sm ${textPrimary} placeholder:${textSecondary} focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className={`text-sm font-medium ${textSecondary} mb-1.5 block`}>Postal Code</label>
+                          <input
+                            type="text"
+                            value={formData.postalCode}
+                            onChange={(e) => updateFormField("postalCode", e.target.value)}
+                            placeholder="123456"
+                            className={`w-full px-4 py-3 rounded-xl ${inputBg} ${borderColor} border text-sm ${textPrimary} placeholder:${textSecondary} focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`text-sm font-medium ${textSecondary} mb-1.5 block`}>Country</label>
+                          <input
+                            type="text"
+                            value={formData.country}
+                            onChange={(e) => updateFormField("country", e.target.value)}
+                            placeholder="India"
+                            className={`w-full px-4 py-3 rounded-xl ${inputBg} ${borderColor} border text-sm ${textPrimary} placeholder:${textSecondary} focus:outline-none focus:ring-2 focus:ring-orange-500/50`}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+            {/* Save Button */}
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              onClick={saveProfile}
+              disabled={saving}
+              className={`w-full py-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30 hover:shadow-orange-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {saving ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Save className="w-5 h-5" />
               )}
-            </div>
+              {saving ? "Saving..." : "Save Profile"}
+            </motion.button>
           </div>
         )}
       </main>

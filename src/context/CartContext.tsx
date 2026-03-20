@@ -18,7 +18,6 @@ interface CartContextType {
   discount: number;
   setDiscount: (d: number) => void;
   grandTotal: number;
-  orderNumber: string;
   showCelebration: boolean;
   triggerCelebration: () => void;
 }
@@ -35,13 +34,6 @@ const STORAGE_KEY = "food-factory-cart";
 const ORDER_KEY = "food-factory-order-num";
 const FIRST_ADD_KEY = "food-factory-first-add";
 
-function generateOrderNumber() {
-  const stored = localStorage.getItem(ORDER_KEY);
-  const num = stored ? parseInt(stored) + 1 : 1001;
-  localStorage.setItem(ORDER_KEY, String(num));
-  return `FF-${num}`;
-}
-
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
@@ -50,7 +42,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } catch { return []; }
   });
   const [discount, setDiscount] = useState(0);
-  const [orderNumber] = useState(() => generateOrderNumber());
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationKey, setCelebrationKey] = useState(0);
 
@@ -106,7 +97,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     <CartContext.Provider value={{
       items, addItem, removeItem, updateQuantity, clearCart,
       totalItems, subtotal, gst, discount: validDiscount, setDiscount,
-      grandTotal, orderNumber, showCelebration, triggerCelebration
+      grandTotal, showCelebration, triggerCelebration
     }}>
       {children}
       {showCelebration && <FirstAddCelebration key={celebrationKey} />}

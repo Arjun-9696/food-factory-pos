@@ -57,7 +57,7 @@ function POSContent() {
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { products, categories, categoryEmojis, loading } = useProducts();
+  const { products, categories, categoryEmojis, loading, refresh } = useProducts();
   const { totalItems, items: cartItems, addItem, updateQuantity } = useCart();
   const { flyingItems, triggerFlyToCart, removeFlyingItem } = useFlyToCart();
   
@@ -71,6 +71,16 @@ function POSContent() {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refresh();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [refresh]);
 
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);

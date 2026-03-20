@@ -2,33 +2,32 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { databases, APPWRITE_CONFIG } from "@/lib/appwrite";
-import { Query } from "appwrite";
+import { supabase, SUPABASE_CONFIG } from "@/lib/supabaseClient";
 import { Link } from "react-router-dom";
 import { 
-  ArrowLeft, Loader2, ShieldAlert, Calendar, DollarSign, 
+  ArrowLeft, Loader2, ShieldAlert, Calendar, 
   ShoppingBag, TrendingUp, ArrowUpDown, Download, 
-  ChevronDown, ChevronUp, BarChart3
+  ChevronDown, ChevronUp, BarChart3, IndianRupee
 } from "lucide-react";
 import { motion } from "motion/react";
 
 interface OrderItem {
-  productName: string;
-  productPrice: number;
+  product_name: string;
+  product_price: number;
   quantity: number;
   total: number;
 }
 
 interface Order {
-  $id: string;
-  orderNumber: string;
-  customerPhone: string | null;
+  id: string;
+  order_number: string;
+  customer_phone: string | null;
   subtotal: number;
   discount: number;
   gst: number;
-  grandTotal: number;
+  grand_total: number;
   status: string;
-  createdAt: string;
+  created_at: string;
   items: OrderItem[];
 }
 
@@ -52,19 +51,53 @@ export default function SalesReport() {
 
   const fetchOrders = async () => {
     try {
-      const response = await databases.listDocuments(
-        APPWRITE_CONFIG.DATABASE_ID,
-        APPWRITE_CONFIG.ORDERS_COLLECTION,
-        [Query.limit(1000), Query.orderDesc("createdAt")]
-      );
-      const ordersList = response.documents.map((doc: any) => ({
+      // Fetch orders
+      const { data: ordersData, error } = await supabase
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+
+      // Fetch order items
+      const orderIds = (ordersData || []).map(o => o.id);
+      let itemsMap: Record<string, OrderItem[]> = {};
+      
+      if (orderIds.length > 0) {
+        const { data: itemsData } = await supabase
+          .from("order_items")
+          .select("*")
+          .in("order_id", orderIds);
+
+        if (itemsData) {
+          itemsData.forEach((item: any) => {
+            if (!itemsMap[item.order_id]) {
+              itemsMap[item.order_id] = [];
+            }
+            itemsMap[item.order_id].push({
+              product_name: item.product_name,
+              product_price: item.product_price,
+              quantity: item.quantity,
+              total: item.total,
+            });
+          });
+        }
+      }
+
+      // Merge items into orders
+      const ordersList = (ordersData || []).map((doc: any) => ({
         ...doc,
-        items: doc.items || [],
-      })) as unknown as Order[];
+        items: itemsMap[doc.id] || [],
+        grand_total: doc.grand_total || 0,
+        subtotal: doc.subtotal || 0,
+        gst: doc.gst || 0,
+        discount: doc.discount || 0,
+      })) as Order[];
+      
       setOrders(ordersList);
-    } catch (error) {
+      localStorage.setItem("ff_orders", JSON.stringify(ordersList));
+    } catch (error: unknown) {
       console.error("Error fetching orders:", error);
-      // Try localStorage
       const localOrders = localStorage.getItem("ff_orders");
       if (localOrders) {
         setOrders(JSON.parse(localOrders));
@@ -87,7 +120,7 @@ export default function SalesReport() {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     return orders.filter(order => {
-      const orderDate = new Date(order.createdAt);
+      const orderDate = new Date(order.created_at);
       
       switch (dateFilter) {
         case "today":
@@ -113,7 +146,7 @@ export default function SalesReport() {
     const stats: Record<string, DailyStats> = {};
 
     filteredOrders.forEach(order => {
-      const date = new Date(order.createdAt).toLocaleDateString("en-IN", {
+      const date = new Date(order.created_at).toLocaleDateString("en-IN", {
         day: "2-digit",
         month: "short",
         year: "numeric",
@@ -131,7 +164,7 @@ export default function SalesReport() {
       }
 
       stats[date].orders += 1;
-      stats[date].totalRevenue += order.grandTotal || 0;
+      stats[date].totalRevenue += order.grand_total || 0;
       stats[date].totalGST += order.gst || 0;
       stats[date].totalDiscount += order.discount || 0;
       stats[date].itemsSold += order.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
@@ -152,7 +185,7 @@ export default function SalesReport() {
   const overallStats = useMemo(() => {
     return {
       totalOrders: filteredOrders.length,
-      totalRevenue: filteredOrders.reduce((sum, o) => sum + (o.grandTotal || 0), 0),
+      totalRevenue: filteredOrders.reduce((sum, o) => sum + (o.grand_total || 0), 0),
       totalGST: filteredOrders.reduce((sum, o) => sum + (o.gst || 0), 0),
       totalDiscount: filteredOrders.reduce((sum, o) => sum + (o.discount || 0), 0),
       totalItemsSold: filteredOrders.reduce((sum, o) => 
@@ -259,7 +292,7 @@ export default function SalesReport() {
             className="p-4 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 text-white"
           >
             <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="w-4 h-4" />
+              <IndianRupee className="w-4 h-4" />
               <span className="text-xs font-medium opacity-80">Total Revenue</span>
             </div>
             <p className="text-2xl font-bold">₹{overallStats.totalRevenue.toLocaleString("en-IN")}</p>
@@ -386,16 +419,16 @@ export default function SalesReport() {
                       <p className="text-sm font-medium text-muted-foreground mb-2">Orders:</p>
                       <div className="space-y-2">
                         {filteredOrders
-                          .filter(o => new Date(o.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) === day.date)
+                          .filter(o => new Date(o.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) === day.date)
                           .map(order => (
-                            <div key={order.$id} className="flex items-center justify-between p-2 bg-card rounded-lg text-sm">
+                            <div key={order.id} className="flex items-center justify-between p-2 bg-card rounded-lg text-sm">
                               <div>
-                                <span className="font-medium text-foreground">{order.orderNumber}</span>
-                                <span className="text-muted-foreground ml-2">{formatTime(order.createdAt)}</span>
+                                <span className="font-medium text-foreground">{order.order_number}</span>
+                                <span className="text-muted-foreground ml-2">{formatTime(order.created_at)}</span>
                               </div>
                               <div className="flex items-center gap-3">
                                 <span className="text-muted-foreground">{order.items?.length || 0} items</span>
-                                <span className="font-bold text-green-600">₹{order.grandTotal?.toLocaleString("en-IN") || 0}</span>
+                                <span className="font-bold text-green-600">₹{order.grand_total?.toLocaleString("en-IN") || 0}</span>
                               </div>
                             </div>
                           ))}

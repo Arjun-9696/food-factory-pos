@@ -1,10 +1,9 @@
 import { useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Plus, Minus, Trash2, ShoppingBag, Printer, Tag, Send, Loader2, QrCode, User, Phone } from "lucide-react";
+import { X, Plus, Minus, Trash2, ShoppingBag, Printer, Tag, Send, Loader2, QrCode, User, Phone, CheckCircle } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { databases, APPWRITE_CONFIG } from "@/lib/appwrite";
-import { ID } from "appwrite";
+import { supabase, SUPABASE_CONFIG } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import { motion } from "motion/react";
@@ -17,15 +16,33 @@ import {
 } from "@/components/ui/expandable-screen";
 
 const triggerConfetti = () => {
-  const end = Date.now() + 3 * 1000;
-  const colors = ["#a786ff", "#fd8bbc", "#eca184", "#f8deb1"];
-  const frame = () => {
-    if (Date.now() > end) return;
-    confetti({ particleCount: 2, angle: 60, spread: 55, startVelocity: 60, origin: { x: 0, y: 0.5 }, colors });
-    confetti({ particleCount: 2, angle: 120, spread: 55, startVelocity: 60, origin: { x: 1, y: 0.5 }, colors });
-    requestAnimationFrame(frame);
+  const colors = ["#ff6a00", "#ff9a00", "#ffd54f", "#ff3d00"];
+
+  const shoot = (angle: number, x: number) => {
+    confetti({
+      particleCount: 30,
+      angle,
+      spread: 55,
+      startVelocity: 50,
+      gravity: 1,
+      ticks: 180,
+      origin: { x, y: 0.5 },
+      colors,
+      scalar: 1.1,
+    });
   };
-  frame();
+
+  // left burst
+  shoot(60, 0);
+
+  // right burst
+  shoot(120, 1);
+
+  // second wave (quick)
+  setTimeout(() => {
+    shoot(60, 0);
+    shoot(120, 1);
+  }, 150);
 };
 
 interface CartDrawerProps {
@@ -123,9 +140,17 @@ function generateBillHTML(
 <html>
 <head>
   <title>Food Factory - Bill ${orderNumber}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 15px; font-size: 11px; line-height: 1.4; max-width: 300px; margin: 0 auto; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 15px; font-size: 11px; line-height: 1.4; max-width: 300px; margin: 0 auto; padding-top: 60px; }
+    .top-bar { position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(135deg, #22c55e, #16a34a); padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; z-index: 9999; }
+    .success-text { color: white; font-weight: bold; font-size: 14px; }
+    .close-btn { background: white; color: #22c55e; border: none; padding: 8px 20px; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.3s ease; }
+    .close-btn:hover { background: #f0f0f0; transform: scale(1.05); }
+    .close-btn:active { transform: scale(0.95); }
+    .bill-content { transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); opacity: 1; transform: scale(1); }
+    .bill-content.closing { opacity: 0; transform: scale(0.8) translateY(-20px); }
     .header { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px dashed #f97316; }
     .logo { width: 50px; height: 50px; background: linear-gradient(135deg, #f97316, #fbbf24); border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
     .logo span { color: white; font-weight: bold; font-size: 18px; }
@@ -145,12 +170,34 @@ function generateBillHTML(
     .grand-total { font-size: 16px; font-weight: 800; border-top: 1px solid #333; padding-top: 8px; margin-top: 5px; color: #f97316; }
     .footer { text-align: center; margin-top: 15px; padding-top: 10px; border-top: 2px dashed #f97316; color: #666; font-size: 10px; }
     .footer p { margin: 2px 0; }
-    @media print { body { padding: 0; } }
+    @media print { .top-bar { display: none; } body { padding-top: 0; } }
   </style>
+  <script>
+    function closeBill() {
+      const content = document.getElementById('billContent');
+      const topBar = document.querySelector('.top-bar');
+      content.classList.add('closing');
+      topBar.style.opacity = '0';
+      topBar.style.transform = 'scale(0.8)';
+      setTimeout(function() {
+        window.close();
+      }, 400);
+    }
+  </script>
 </head>
 <body>
+  <div class="top-bar">
+    <span class="success-text">✓ Order Placed!</span>
+    <button class="close-btn" onclick="closeBill()">Close</button>
+  </div>
+  <div class="bill-content" id="billContent">
+    <div class="header">
+      <div class="logo"><img src="/foodfactory.png" style="width:50px;height:50px;border-radius:10px;" /></div>
+      <div class="brand">Food Factory</div>
+      <div class="tagline">The Quality Taste</div>
+    </div>
   <div class="header">
-    <div class="logo"><span>FF</span></div>
+    <div class="logo"><img src="/foodfactory.png" style="width:50px;height:50px;border-radius:10px;" /></div>
     <div class="brand">Food Factory</div>
     <div class="tagline">The Quality Taste</div>
   </div>
@@ -193,6 +240,7 @@ function generateBillHTML(
     <p>Visit again 🙏</p>
     <p style="margin-top: 5px; font-size: 8px;">Food Factory - The Quality Taste</p>
   </div>
+  </div>
 </body>
 </html>`;
 }
@@ -208,7 +256,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const {
     items, updateQuantity, removeItem, clearCart,
     subtotal, gst, discount, setDiscount, grandTotal,
-    totalItems, orderNumber,
+    totalItems,
   } = useCart();
   const { user } = useAuth();
 
@@ -217,6 +265,8 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showBill, setShowBill] = useState(false);
+  const [billData, setBillData] = useState<{orderNumber: string; customerName: string; customerPhone: string; items: any[]; subtotal: number; discount: number; gst: number; grandTotal: number} | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   const now = new Date();
@@ -237,33 +287,99 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     onClose();
   }, [clearCart, onClose]);
 
-  const saveOrderToAppwrite = useCallback(async () => {
+  const saveOrderToAppwrite = useCallback(async (): Promise<{ id: string; order_number: number }> => {
+    const now = new Date().toISOString();
+
+    // Find or create customer first
+    if (customerPhone) {
+      const { data: existingCustomer } = await supabase
+        .from("customers")
+        .select("id, total_orders, total_spent, loyalty_points")
+        .eq("phone", customerPhone)
+        .maybeSingle();
+
+      if (existingCustomer) {
+        // Update existing customer
+        await supabase
+          .from("customers")
+          .update({
+            name: customerName || "Guest",
+            total_orders: (existingCustomer.total_orders || 0) + 1,
+            total_spent: (existingCustomer.total_spent || 0) + (grandTotal || 0),
+            loyalty_points: (existingCustomer.loyalty_points || 0) + Math.floor((grandTotal || 0) / 10),
+            last_order_date: now,
+            updated_at: now,
+          })
+          .eq("id", existingCustomer.id);
+      } else {
+        // Create new customer
+        const { data: newCustomer, error: customerError } = await supabase
+          .from("customers")
+          .insert({
+            name: customerName || "Guest",
+            phone: customerPhone,
+            email: null,
+            total_orders: 1,
+            total_spent: grandTotal || 0,
+            loyalty_points: Math.floor((grandTotal || 0) / 10),
+            last_order_date: now,
+            created_at: now,
+            updated_at: now,
+          })
+          .select("id")
+          .single();
+        
+        if (!customerError && newCustomer) {
+          // Customer created successfully
+        }
+      }
+    }
+    
     const orderData = {
-      orderNumber,
-      customerName: customerName || null,
-      customerPhone: customerPhone || null,
-      subtotal, discount, gst, grandTotal,
+      customer_name: customerName || null,
+      customer_phone: customerPhone || null,
+      subtotal: subtotal || 0, 
+      discount: discount || 0, 
+      gst: gst || 0, 
+      grand_total: grandTotal || 0,
       status: "completed",
-      userId: user?.id,
-      createdAt: new Date().toISOString(),
-      items: items.map(ci => ({
-        productName: ci.item.name,
-        productPrice: ci.item.price,
-        quantity: ci.quantity,
-        total: ci.item.price * ci.quantity,
-      })),
+      created_at: now,
+      updated_at: now,
     };
     try {
-      await databases.createDocument(
-        APPWRITE_CONFIG.DATABASE_ID,
-        APPWRITE_CONFIG.ORDERS_COLLECTION,
-        ID.unique(),
-        orderData
-      );
-    } catch {
-      saveOrderLocally({ ...orderData, id: "ord_" + Math.random().toString(36).substr(2, 9) });
+      const { data: orderResult, error: orderError } = await supabase
+        .from("orders")
+        .insert(orderData)
+        .select("id, order_number")
+        .single();
+      
+      if (orderError) {
+        console.error("Order insert error:", orderError);
+        throw new Error(orderError.message);
+      }
+
+      if (orderResult && items.length > 0) {
+        // Save order items
+        const orderItemsData = items.map(item => ({
+          order_id: orderResult.id,
+          product_name: item.item.name,
+          product_price: item.item.price,
+          quantity: item.quantity,
+          total: (item.item.price || 0) * (item.quantity || 1),
+        }));
+
+        await supabase
+          .from("order_items")
+          .insert(orderItemsData);
+      }
+
+      return orderResult;
+    } catch (error: any) {
+      console.error("Order save error:", error);
+      toast.error(error.message || "Failed to save order");
+      throw error;
     }
-  }, [orderNumber, customerName, customerPhone, subtotal, discount, gst, grandTotal, user, items]);
+  }, [customerName, customerPhone, subtotal, discount, gst, grandTotal, items]);
 
   const resetAfterOrder = useCallback(() => {
     clearCart();
@@ -273,50 +389,187 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   }, [clearCart]);
 
   const handlePrint = useCallback(async () => {
+    if (items.length === 0) {
+      toast.error("Cart is empty");
+      return;
+    }
     setSaving(true);
-    await saveOrderToAppwrite();
-    toast.success("Order saved!");
-    triggerConfetti();
-    resetAfterOrder();
-    setSaving(false);
+    try {
+      const orderResult = await saveOrderToAppwrite();
+      toast.success("Order saved!");
+      triggerConfetti();
+      
+      // Show in-app bill instead of popup
+      setBillData({
+        orderNumber: String(orderResult.order_number),
+        customerName,
+        customerPhone,
+        items,
+        subtotal,
+        discount,
+        gst,
+        grandTotal
+      });
+      setShowBill(true);
+      resetAfterOrder();
+      setSaving(false);
+    } catch (error: any) {
+      console.error("Print error:", error);
+      toast.error(error?.message || "Failed to save order");
+      setSaving(false);
+    }
+  }, [saveOrderToAppwrite, resetAfterOrder, customerName, customerPhone, items, subtotal, discount, gst, grandTotal]);
 
-    const printWindow = window.open("", "_blank", "width=400,height=600");
-    if (!printWindow) { toast.error("Please allow popups for printing"); return; }
-    printWindow.document.write(generateBillHTML(orderNumber, customerName, customerPhone, items, subtotal, discount, gst, grandTotal));
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-      navigate("/");
-    }, 250);
-  }, [saveOrderToAppwrite, resetAfterOrder, orderNumber, customerName, customerPhone, items, subtotal, discount, gst, grandTotal, navigate]);
+  const closeBill = () => {
+    setShowBill(false);
+    setBillData(null);
+    onClose();
+    navigate("/");
+  };
 
   const handleWhatsApp = useCallback(async () => {
     if (!customerPhone.trim()) { 
       toast.error("Please enter WhatsApp number"); 
       return; 
     }
+    if (items.length === 0) {
+      toast.error("Cart is empty");
+      return;
+    }
     setSaving(true);
-    await saveOrderToAppwrite();
-    const billText = formatBillText(orderNumber, customerName, customerPhone, items, subtotal, discount, gst, grandTotal);
-    const phone = customerPhone.replace(/\D/g, "");
-    const fullPhone = phone.startsWith("91") ? phone : `91${phone}`;
-    window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(billText)}`, "_blank");
-    toast.success("Opening WhatsApp...");
-    triggerConfetti();
-    resetAfterOrder();
-    setSaving(false);
-    navigate("/");
-  }, [customerPhone, saveOrderToAppwrite, orderNumber, customerName, items, subtotal, discount, gst, grandTotal, resetAfterOrder, navigate]);
+    try {
+      const orderResult = await saveOrderToAppwrite();
+      const billText = formatBillText(String(orderResult.order_number), customerName, customerPhone, items, subtotal, discount, gst, grandTotal);
+      const phone = customerPhone.replace(/\D/g, "");
+      const fullPhone = phone.startsWith("91") ? phone : `91${phone}`;
+      window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(billText)}`, "_blank");
+      toast.success("Opening WhatsApp...");
+      triggerConfetti();
+      resetAfterOrder();
+      navigate("/");
+    } catch (error: any) {
+      console.error("WhatsApp error:", error);
+      toast.error(error?.message || "Failed to save order");
+    } finally {
+      setSaving(false);
+    }
+  }, [customerPhone, saveOrderToAppwrite, customerName, items, subtotal, discount, gst, grandTotal, resetAfterOrder, navigate]);
 
   const handleQRPaid = useCallback(async () => {
-    await saveOrderToAppwrite();
-    toast.success("Payment confirmed! Order saved 🎉");
-    triggerConfetti();
-    resetAfterOrder();
-    onClose();
-    navigate("/");
-  }, [saveOrderToAppwrite, resetAfterOrder, onClose, navigate]);
+    if (items.length === 0) {
+      toast.error("Cart is empty");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveOrderToAppwrite();
+      toast.success("Payment confirmed! Order saved 🎉");
+      triggerConfetti();
+      resetAfterOrder();
+      onClose();
+      navigate("/");
+    } catch (error: any) {
+      console.error("QR payment error:", error);
+      toast.error(error?.message || "Failed to save order");
+    } finally {
+      setSaving(false);
+    }
+  }, [saveOrderToAppwrite, resetAfterOrder, onClose, navigate, items]);
+
+  // Bill Modal
+  if (showBill && billData) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-background">
+        {/* Top Bar */}
+        <div className="sticky top-0 bg-gradient-to-r from-green-500 to-green-600 p-4 flex items-center justify-center text-white">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5" />
+            <span className="font-bold">Order Placed!</span>
+          </div>
+        </div>
+        
+        {/* Bill Content */}
+        <div className="p-4 max-w-sm mx-auto pb-24">
+          <div className="bg-card rounded-2xl p-4 shadow-lg border">
+            {/* Header */}
+            <div className="text-center border-b-2 border-dashed border-orange-400 pb-4 mb-4">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-2 border-2 dark:border-orange-400 border-orange-600">
+                <img src="/foodfactory.png" alt="FF" className="w-10 h-10 rounded-lg" />
+              </div>
+              <h2 className="text-xl font-bold text-orange-500">Food Factory</h2>
+              <p className="text-xs text-muted-foreground">The Quality Taste</p>
+            </div>
+            
+            {/* Order Info */}
+            <div className="flex justify-between text-sm mb-3 pb-3 border-b">
+              <div>
+                <p className="font-bold text-lg">#{billData.orderNumber}</p>
+                <p className="text-xs text-muted-foreground">
+                  {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} • {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+            
+            {/* Customer Info */}
+            {(billData.customerName || billData.customerPhone) && (
+              <div className="text-sm mb-3 pb-3 border-b">
+                {billData.customerName && <p><strong>Customer:</strong> {billData.customerName}</p>}
+                {billData.customerPhone && <p><strong>Phone:</strong> {billData.customerPhone}</p>}
+              </div>
+            )}
+            
+            {/* Items */}
+            <div className="mb-3">
+              {billData.items.map((ci: any, idx: number) => (
+                <div key={idx} className="flex justify-between py-1 text-sm">
+                  <span className="text-foreground">{ci.quantity}x {ci.item.name}</span>
+                  <span className="text-muted-foreground">₹{ci.item.price * ci.quantity}</span>
+                </div>
+              ))}
+            </div>
+            
+            {/* Totals */}
+            <div className="border-t-2 border-dashed border-orange-400 pt-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>₹{billData.subtotal}</span>
+              </div>
+              {billData.discount > 0 && (
+                <div className="flex justify-between text-sm text-green-500">
+                  <span>Discount</span>
+                  <span>-₹{billData.discount}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">GST (5%)</span>
+                <span>₹{billData.gst}</span>
+              </div>
+              <div className="flex justify-between font-bold text-lg pt-2 mt-2 border-t">
+                <span>Total</span>
+                <span className="text-orange-500">₹{billData.grandTotal}</span>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="text-center mt-4 pt-4 border-t-2 border-dashed border-orange-400 text-muted-foreground text-sm">
+              <p>Thank you for your visit!</p>
+              <p>Visit again 🙏</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Bottom Close Button */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
+          <button 
+            onClick={closeBill}
+            className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg"
+          >
+            Close & Go Home
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!open) return null;
 
@@ -339,7 +592,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
 
         {/* Order info bar */}
         <div className="px-4 py-2 flex items-center justify-between text-xs bg-surface-warm text-foreground flex-shrink-0">
-          <span>Order: <strong>{orderNumber}</strong></span>
+          <span>Order: <strong>---</strong></span>
           <span>{dateStr} • {timeStr}</span>
         </div>
 
@@ -361,21 +614,21 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button onClick={() => updateQuantity(ci.item.id, ci.quantity - 1)}
-                    className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center">
-                    <Minus className="w-3.5 h-3.5 text-muted-foreground dark:text-gray-400" />
+                    className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
+                    <Minus className="w-4 h-4 text-muted-foreground dark:text-gray-400" />
                   </button>
-                  <span className="w-6 text-center text-sm font-bold text-foreground">{ci.quantity}</span>
+                  <span className="w-7 text-center text-sm font-bold text-foreground">{ci.quantity}</span>
                   <button onClick={() => updateQuantity(ci.item.id, ci.quantity + 1)}
-                    className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center">
-                    <Plus className="w-3.5 h-3.5 dark:text-gray-400" />
+                    className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
+                    <Plus className="w-4 h-4 dark:text-gray-400" />
                   </button>
                 </div>
                 <div className="text-right min-w-[50px] flex-shrink-0">
                   <p className="text-sm font-bold text-foreground">₹{ci.item.price * ci.quantity}</p>
                 </div>
                 <button onClick={() => removeItem(ci.item.id)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-destructive flex-shrink-0">
-                  <Trash2 className="w-3.5 h-3.5" />
+                  className="w-9 h-9 rounded-lg flex items-center justify-center text-destructive flex-shrink-0">
+                    <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             ))
@@ -477,7 +730,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                     <div className="flex flex-col h-full p-6">
                       <div className="flex justify-center">
                         <div className="p-4 bg-white rounded-xl shadow-inner">
-                          <PaymentQR grandTotal={grandTotal} orderNumber={orderNumber}/>
+                          <PaymentQR grandTotal={grandTotal} orderNumber="PENDING"/>
                         </div>
                       </div>
 

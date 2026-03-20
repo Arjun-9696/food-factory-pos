@@ -1,6 +1,6 @@
 // ============================================================================
 // FOOD FACTORY POS - Prisma Schema
-// Using SQLite for local development
+// Using Supabase PostgreSQL
 // ============================================================================
 
 generator client {
@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ============================================================================
@@ -16,96 +16,133 @@ datasource db {
 // ============================================================================
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  passwordHash String    @map("password_hash")
-  displayName  String?   @map("display_name")
-  phone        String?
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  
-  role         UserRole?
-  profile      Profile?
-  orders       Order[]
+  id        String   @id @default(uuid())
+  name      String?
+  email     String?  @unique
+  phone     String?
+  role      String   @default("customer")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  orders    Order[]
+  profile   Profile?
+  cart      Cart[]
 
   @@map("users")
 }
 
 model Profile {
-  id          String   @id @default(uuid())
-  userId      String   @unique @map("user_id")
-  displayName String?  @map("display_name")
-  phone       String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String    @id @default(uuid())
+  userId        String    @unique @map("user_id")
+  fullName      String?   @map("full_name")
+  email         String?
+  phone         String?
+  gender        String?
+  dob           DateTime? @db.Date
+  houseNumber   String?   @map("house_number")
+  street        String?
+  area          String?
+  city          String?
+  state         String?
+  postalCode    String?   @map("postal_code")
+  country       String?   @default("India")
+  latitude      Float?    @default(0)
+  longitude     Float?    @default(0)
+  fullAddress   String?   @map("full_address")
+  avatarUrl     String?   @map("avatar_url")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   @@map("profiles")
 }
 
-model UserRole {
+model Category {
   id        String   @id @default(uuid())
-  userId    String   @unique @map("user_id")
-  role      String   // "admin" or "user"
+  name      String   @unique
+  emoji     String?
   createdAt DateTime @default(now()) @map("created_at")
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("user_roles")
+  @@map("categories")
 }
 
 model Product {
-  id          String      @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
   description String?
   category    String
   price       Float
-  foodType    String      @default("veg") @map("food_type")
+  foodType    String   @default("veg") @map("food_type")
+  isVeg       Boolean  @default(true) @map("is_veg")
   image       String?
-  available   Boolean     @default(true)
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  
-  orderItems  OrderItem[]
+  available   Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@index([category])
+  @@index([available])
   @@map("products")
 }
 
+model Customer {
+  id              String    @id @default(uuid())
+  name            String?
+  phone           String    @unique
+  email           String?
+  totalOrders     Int       @default(0) @map("total_orders")
+  totalSpent      Float     @default(0) @map("total_spent")
+  loyaltyPoints   Int       @default(0) @map("loyalty_points")
+  loyaltyDate     DateTime? @map("loyalty_date")
+  lastOrderDate   DateTime? @map("last_order_date")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("customers")
+}
+
 model Order {
-  id            String      @id @default(uuid())
-  orderNumber   String      @unique @map("order_number")
-  customerPhone String?     @map("customer_phone")
-  subtotal      Float
-  discount      Float       @default(0)
-  gst           Float       @default(0)
-  grandTotal    Float       @map("grand_total")
-  status        String      @default("completed")
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
-  
-  userId        String?     @map("created_by")
-  user          User?       @relation(fields: [userId], references: [id])
-  items         OrderItem[]
+  id              String      @id @default(uuid())
+  orderNumber     Int         @unique @default(autoincrement()) @map("order_number")
+  userId          String?     @map("user_id")
+  customerName    String?     @map("customer_name")
+  customerPhone   String?     @map("customer_phone")
+  subtotal        Float
+  discount        Float       @default(0)
+  gst             Float       @default(0)
+  grandTotal      Float       @map("grand_total")
+  status          String      @default("pending")
+  paymentMethod   String?     @map("payment_method")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  items           OrderItem[]
 
   @@index([userId])
+  @@index([createdAt])
+  @@index([status])
   @@map("orders")
 }
 
 model OrderItem {
   id            String   @id @default(uuid())
   orderId       String   @map("order_id")
-  productId     String?  @map("product_id")
   productName   String   @map("product_name")
   productPrice  Float    @map("product_price")
-  quantity      Int      @default(1)
+  quantity      Int
   total         Float
   createdAt     DateTime @default(now()) @map("created_at")
-  
+
   order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product       Product? @relation(fields: [productId], references: [id])
 
   @@index([orderId])
   @@map("order_items")
+}
+
+model Cart {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  productId String?  @map("product_id")
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("cart")
 }

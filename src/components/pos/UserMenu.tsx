@@ -111,18 +111,21 @@ export function UserMenu({ isAdmin }: UserMenuProps) {
           </div>
 
           <div className="border-t border-border/50 py-1">
-            <button
-              onClick={handleSignOut}
-              disabled={loading}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <LogOut className="w-4 h-4" />
-              )}
-              Sign Out
-            </button>
+           <button
+  onClick={handleSignOut}
+  disabled={loading}
+  className="w-full flex items-center gap-2 px-3.5 py-2 text-sm 
+  text-red-600 dark:text-red-400 
+  hover:bg-red-100 dark:hover:bg-red-500/20 
+  transition-colors"
+>
+  {loading ? (
+    <Loader2 className="w-4 h-4 animate-spin text-red-600 dark:text-red-400" />
+  ) : (
+    <LogOut className="w-4 h-4 text-red-600 dark:text-red-400" />
+  )}
+Sign Out
+</button>
           </div>
         </div>
       )}
