@@ -1,10 +1,12 @@
-import { Search, ShoppingBag } from "lucide-react";
+import { Search, ShoppingBag, Bell, BellRing } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { UserMenu } from "./UserMenu";
 import { AnimatedThemeToggler } from "@/components/magicui/animated-theme-toggler";
 import { SearchResults } from "./MobileSearchResults";
 import { type MenuItem } from "@/data/menu";
 import { useState, useEffect } from "react";
+import { browserNotification } from "@/lib/notifications";
+import { toast } from "sonner";
 
 interface POSHeaderProps {
   searchQuery: string;
@@ -31,20 +33,43 @@ export function POSHeader({
 }: POSHeaderProps) {
   const { isAdmin } = useAuth();
   const [isMobile, setIsMobile] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
+    
+    const checkNotificationStatus = () => {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        setNotificationsEnabled(Notification.permission === 'granted');
+      }
+    };
+    checkNotificationStatus();
+    
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  const handleEnableNotifications = async () => {
+    const granted = await browserNotification.requestPermission();
+    setNotificationsEnabled(granted);
+    if (granted) {
+      toast.success('Notifications enabled! You will receive order updates.');
+      await browserNotification.show({ 
+        title: 'Notifications Enabled!',
+        body: 'You will receive order updates and promotions.',
+      });
+    } else {
+      toast.error('Please enable notifications in browser settings');
+    }
+  };
 
   const handleCloseSearch = () => {
     onSearchChange("");
   };
 
   return (
-    <header className="sticky top-0 z-40 glass-surface border-b border-border/30">
+    <header className="sticky top-0 z-40 glass-surface border-b border-border/30 safe-area-top">
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           {/* Brand with OrbitingCircles */}
@@ -110,6 +135,19 @@ export function POSHeader({
 
           {/* Right controls */}
           <div className="flex items-center gap-2">
+            {/* Notification Bell */}
+            <button
+              onClick={handleEnableNotifications}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-foreground hover:bg-secondary/80 transition-all hover:scale-105 relative"
+              title={notificationsEnabled ? 'Notifications enabled' : 'Enable notifications'}
+            >
+              {notificationsEnabled ? (
+                <BellRing className="w-5 h-5 text-orange-500" />
+              ) : (
+                <Bell className="w-5 h-5" />
+              )}
+            </button>
+
             {/* Animated Theme Toggle with continuous spin */}
             <AnimatedThemeToggler
               className="w-10 h-10 rounded-xl flex items-center justify-center text-foreground hover:bg-secondary/80 transition-all hover:scale-105"

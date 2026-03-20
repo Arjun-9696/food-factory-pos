@@ -141,6 +141,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error.message?.includes("Email not confirmed")) {
         return { error: "Please confirm your email first." };
       }
+      if (error.message?.includes("session is active")) {
+        // Already logged in, refresh the page
+        window.location.reload();
+        return { error: null };
+      }
       return { error: error.message || "Login failed. Please try again." };
     }
   };

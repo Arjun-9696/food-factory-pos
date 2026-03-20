@@ -49,10 +49,11 @@ const App = () => (
       <Toaster />
       <Sonner />
       <CartProvider>
-        <div className="min-h-screen bg-background relative">
+        <div className="min-h-screen bg-background relative fullscreen-app no-overscroll">
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <LightRays className="text-orange-500" />
           </div>
+
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <CapacitorInit>
             <AuthProvider>

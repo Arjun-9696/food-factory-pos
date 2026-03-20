@@ -42,6 +42,14 @@ async function setup() {
             Permission.delete(Role.users()),
         ];
 
+        // Categories Collection
+        try {
+            await databases.createCollection(DATABASE_ID, "categories", "categories", publicReadPerms, false);
+            console.log("✅ Categories collection created");
+        } catch (e: any) {
+            console.log("ℹ️  Categories:", e.message || e.code);
+        }
+
         // Users Collection
         try {
             await databases.createCollection(DATABASE_ID, "users", "users", userPerms, false);

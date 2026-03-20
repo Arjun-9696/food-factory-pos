@@ -49,6 +49,11 @@ interface ProfileData {
   updated_at?: string;
 }
 
+interface GeoLocation {
+  latitude: number;
+  longitude: number;
+}
+
 export default function Profile() {
   const { user } = useAuth();
   const { theme } = useTheme();

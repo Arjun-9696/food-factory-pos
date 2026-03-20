@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { X, Plus, Minus, Trash2, ShoppingBag, Printer, Tag, Send, Loader2, QrCode, User, Phone, CheckCircle } from "lucide-react";
+
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { supabase, SUPABASE_CONFIG } from "@/lib/supabaseClient";
@@ -14,6 +15,8 @@ import {
   ExpandableScreenContent,
   ExpandableScreenTrigger,
 } from "@/components/ui/expandable-screen";
+import { browserNotification } from "@/lib/notifications";
+import { downloadBillPDF } from "@/lib/billGenerator";
 
 const triggerConfetti = () => {
   const colors = ["#ff6a00", "#ff9a00", "#ffd54f", "#ff3d00"];
@@ -572,6 +575,72 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   }
 
   if (!open) return null;
+
+  if (showOrderComplete) {
+    return (
+      <>
+        <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm z-50" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="bg-gradient-to-br from-orange-500 to-amber-500 p-6 text-center">
+              <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <CheckCircle className="w-12 h-12 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-white">Order Placed!</h2>
+              <p className="text-white/80 text-sm">Thank you for your order</p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="bg-secondary rounded-xl p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-muted-foreground">Order Number</span>
+                  <span className="font-bold text-foreground">#{completedOrder?.orderNumber || orderNumber}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Total Amount</span>
+                  <span className="font-bold text-orange-500 text-lg">₹{(completedOrder?.grandTotal || grandTotal).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  onClick={handleDownloadPDF}
+                  disabled={downloadingPDF}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {downloadingPDF ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  Download Bill (PDF)
+                </button>
+                
+                <button
+                  onClick={handleWhatsApp}
+                  className="w-full py-3 rounded-xl bg-green-500 text-white font-semibold flex items-center justify-center gap-2"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Share on WhatsApp
+                </button>
+                
+                <button
+                  onClick={handleCloseOrderComplete}
+                  className="w-full py-3 rounded-xl border-2 border-border text-foreground font-semibold"
+                >
+                  Continue Shopping
+                </button>
+              </div>
+
+              <p className="text-center text-xs text-muted-foreground">
+                A push notification will be sent to update you about your order status.
+              </p>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
