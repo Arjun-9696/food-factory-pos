@@ -78,14 +78,15 @@ export function POSHeader({
     
     {/* Logo */}
     <img
-      src="/foodfactory.svg"
+      src="/foodfactorylogo.png"
       alt="Food Factory Logo"
-      className="w-[40px] h-[45px] object-contain pt-[1px]"
+      className="w-[54px] h-[50px]  rounded-sm object-fit overflow-hidden"
     />
 
     {/* Text Section */}
     <div className="flex flex-col">
-      <h1 className="text-2xl font-extrabold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
+      <h1 className="text-2xl font-extrabold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}
+      >
         Food Factory
       </h1>
        <p className="text-xs md:text-xs font-medium text-primary  flex items-center">

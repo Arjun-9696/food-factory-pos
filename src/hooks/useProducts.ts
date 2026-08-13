@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { supabase, SUPABASE_CONFIG } from "@/lib/supabaseClient";
-import type { MenuItem } from "@/data/menu";
+import { supabase, SUPABASE_CONFIG, isSupabaseConfigured } from "@/lib/supabaseClient";
+import { type MenuItem, menuItems as fallbackMenuItems, categories as fallbackCategories } from "@/data/menu";
 import { CATEGORY_EMOJI_MAP } from "@/data/categories";
 
 export interface CategoryData {
@@ -82,6 +82,15 @@ export function useProducts() {
   };
 
   const fetchProducts = useCallback(async () => {
+    if (!isSupabaseConfigured()) {
+      console.log("Supabase is not configured, loading local fallback data...");
+      setProducts(fallbackMenuItems);
+      setCategories([...fallbackCategories] as string[]);
+      setCategoryEmojis(CATEGORY_EMOJI_MAP);
+      setLoading(false);
+      return;
+    }
+
     try {
       console.log("Fetching products from Supabase...");
       const { data: productsData, error: productsError } = await supabase
@@ -116,10 +125,9 @@ export function useProducts() {
       setCategories(categoriesData.names);
       setCategoryEmojis(categoriesData.emojis);
     } catch (error) {
-      console.error("Error fetching products:", error);
-      const { menuItems, categories: cats } = await import("@/data/menu");
-      setProducts(menuItems);
-      setCategories([...cats] as string[]);
+      console.error("Error fetching products from database, falling back to local data:", error);
+      setProducts(fallbackMenuItems);
+      setCategories([...fallbackCategories] as string[]);
       setCategoryEmojis(CATEGORY_EMOJI_MAP);
     } finally {
       setLoading(false);

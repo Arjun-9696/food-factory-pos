@@ -61,7 +61,7 @@ export default function SalesReport() {
 
       // Fetch order items
       const orderIds = (ordersData || []).map(o => o.id);
-      let itemsMap: Record<string, OrderItem[]> = {};
+      const itemsMap: Record<string, OrderItem[]> = {};
       
       if (orderIds.length > 0) {
         const { data: itemsData } = await supabase

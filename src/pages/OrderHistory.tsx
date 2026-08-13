@@ -65,7 +65,7 @@ export default function OrderHistory() {
 
       // Fetch order items for all orders
       const orderIds = (ordersData || []).map(o => o.id);
-      let itemsMap: Record<string, OrderItem[]> = {};
+      const itemsMap: Record<string, OrderItem[]> = {};
       
       if (orderIds.length > 0) {
         const { data: itemsData } = await supabase
