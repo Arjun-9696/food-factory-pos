@@ -1,0 +1,6 @@
+interface:
+  display_name: "Food Factory Pos"
+  short_description: "Repo-specific patterns and workflows for food-factory-pos"
+  default_prompt: "Use the food-factory-pos repo skill to follow existing architecture, testing, and workflow conventions."
+policy:
+  allow_implicit_invocation: true
