@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
 
 interface User {
   id: string;
@@ -32,6 +32,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      console.warn("Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env");
+      setLoading(false);
+      return;
+    }
+
     checkCurrentUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -73,6 +79,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, name?: string) => {
     try {
+      if (!isSupabaseConfigured()) {
+        return { error: "Supabase is not configured. Please check your environment variables." };
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -97,20 +107,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { error: "Signup failed. Please try again." };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Signup error:", error);
-      if (error.message?.includes("rate limit") || error.code === "429") {
+      const msg = error instanceof Error ? error.message : String(error);
+      const errCode = error && typeof error === "object" ? (error as Record<string, string>).code : undefined;
+      if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+        return { error: "Cannot reach authentication server. Check your internet connection or Supabase project status." };
+      }
+      if (msg.includes("rate limit") || errCode === "429") {
         return { error: "Too many attempts. Please wait 5 minutes and try again." };
       }
-      if (error.message?.includes("already registered") || error.code === "user_already_exists") {
+      if (msg.includes("already registered") || errCode === "user_already_exists") {
         return { error: "An account with this email already exists. Please sign in instead." };
       }
-      return { error: error.message || "Signup failed. Please try again." };
+      return { error: msg || "Signup failed. Please try again." };
+    }
+
+  const signIn = async (email: string, password: string) => {
+    try {
+      if (!isSupabaseConfigured()) {
+        return { error: "Supabase is not configured. Please check your environment variables." };
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        const isAdminEmail = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        setUser({
+          id: data.user.id,
+          email: data.user.email || email,
+          name: data.user.user_metadata?.name || email.split("@")[0],
+        });
+        setIsAdmin(isAdminEmail);
+        return { error: null };
+      }
+
+      return { error: "Login failed. Please try again." };
+    } catch (error: unknown) {
+      console.error("Login error:", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      const errCode = error && typeof error === "object" ? (error as Record<string, string>).code : undefined;
+      const errStatus = error && typeof error === "object" ? (error as Record<string, number>).status : undefined;
+      if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+        return { error: "Cannot reach authentication server. Check your internet connection or Supabase project status." };
+      }
+      if (msg.includes("rate limit") || errCode === "429") {
+        return { error: "Too many attempts. Please wait 5 minutes and try again." };
+      }
+      if (msg.includes("Invalid login credentials") || errStatus === 400) {
+        return { error: "Invalid email or password. Please try again." };
+      }
+      if (msg.includes("Email not confirmed")) {
+        return { error: "Please confirm your email first." };
+      }
+      return { error: msg || "Login failed. Please try again." };
+    }
+      if (msg.includes("rate limit") || (error as Record<string, string>).code === "429") {
+        return { error: "Too many attempts. Please wait 5 minutes and try again." };
+      }
+      if (msg.includes("already registered") || (error as Record<string, string>).code === "user_already_exists") {
+        return { error: "An account with this email already exists. Please sign in instead." };
+      }
+      return { error: msg || "Signup failed. Please try again." };
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
+      if (!isSupabaseConfigured()) {
+        return { error: "Supabase is not configured. Please check your environment variables." };
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -132,6 +204,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: "Login failed. Please try again." };
     } catch (error: any) {
       console.error("Login error:", error);
+      if (error.message?.includes("Failed to fetch") || error.message?.includes("NetworkError")) {
+        return { error: "Cannot reach authentication server. Check your internet connection or Supabase project status." };
+      }
       if (error.message?.includes("rate limit") || error.code === "429") {
         return { error: "Too many attempts. Please wait 5 minutes and try again." };
       }
@@ -153,7 +228,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
-    } catch {}
+    } catch {
+      // Session may already be invalid
+    }
     setUser(null);
     setIsAdmin(false);
   };

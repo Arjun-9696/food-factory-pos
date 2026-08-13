@@ -3,7 +3,58 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Check if Supabase has a working configuration and is NOT pointing to the dead/deleted project
+export const isSupabaseConfigured = () => {
+  return !!(
+    supabaseUrl &&
+    supabaseAnonKey &&
+    !supabaseUrl.includes("oyeehgdufyttqxcstdel") &&
+    supabaseUrl !== "https://your-project-ref.supabase.co"
+  );
+};
+
+// Create a dummy mock client to prevent any network requests if not configured or points to dead project
+const createMockSupabaseClient = () => {
+  const mockHandler = {
+    get(target: any, prop: string): any {
+      if (prop === "auth") {
+        return {
+          onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+          getSession: async () => ({ data: { session: null }, error: null }),
+          signUp: async () => ({ data: { user: null }, error: new Error("Supabase is not configured") }),
+          signInWithPassword: async () => ({ data: { user: null }, error: new Error("Supabase is not configured") }),
+          signOut: async () => {},
+        };
+      }
+      if (prop === "from") {
+        return () => ({
+          select: () => ({
+            order: () => ({
+              limit: () => Promise.resolve({ data: [], error: null }),
+              eq: () => Promise.resolve({ data: [], error: null }),
+              in: () => Promise.resolve({ data: [], error: null }),
+              then: (resolve: any) => resolve({ data: [], error: null }),
+            }),
+            eq: () => ({
+              order: () => Promise.resolve({ data: [], error: null }),
+              then: (resolve: any) => resolve({ data: [], error: null }),
+            }),
+            in: () => Promise.resolve({ data: [], error: null }),
+            then: (resolve: any) => resolve({ data: [], error: null }),
+          }),
+          insert: () => Promise.resolve({ data: [], error: null }),
+          upsert: () => Promise.resolve({ data: [], error: null }),
+        });
+      }
+      return () => Promise.resolve({ data: null, error: null });
+    }
+  };
+  return new Proxy({}, mockHandler);
+};
+
+export const supabase = isSupabaseConfigured()
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : createMockSupabaseClient();
 
 export const SUPABASE_CONFIG = {
   PRODUCTS_TABLE: "products",

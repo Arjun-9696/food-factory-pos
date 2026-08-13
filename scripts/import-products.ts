@@ -46,7 +46,7 @@ function parseCSV(content: string): any[] {
 
     const product: any = {};
     headers.forEach((header, idx) => {
-      let value = values[idx]?.trim().replace(/"/g, "") || "";
+      const value = values[idx]?.trim().replace(/"/g, "") || "";
       product[header.toLowerCase().replace(/[^a-z]/g, "")] = value;
     });
 

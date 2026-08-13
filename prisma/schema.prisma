@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
 }
 
 // ============================================================================
@@ -51,6 +51,8 @@ model Profile {
   avatarUrl     String?   @map("avatar_url")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("profiles")
 }
@@ -114,6 +116,7 @@ model Order {
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
   items           OrderItem[]
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([createdAt])
@@ -142,6 +145,8 @@ model Cart {
   productId String?  @map("product_id")
   quantity  Int      @default(1)
   createdAt DateTime @default(now()) @map("created_at")
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("cart")

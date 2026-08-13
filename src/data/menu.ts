@@ -13,20 +13,20 @@ export interface MenuItem {
 
 export const categories = [
   "All",
-  "Fresh Juices",
-  "Milkshakes",
-  "Special Milkshake",
-  "Cold Coffee",
+  // "Fresh Juices",
+  // "Milkshakes",
+  // "Special Milkshake",
+  // "Cold Coffee",
   "Burgers",
-  "Sandwich",
-  "Momos",
-  "Noodles",
+  // "Sandwich",
+  // "Momos",
+  // "Noodles",
   "Fries",
   "Snacks",
-  "Egg Items",
+  // "Egg Items",
   "Bakery",
-  "Desserts",
-  "Hot Beverages",
+  // "Desserts",
+  // "Hot Beverages",
 ] as const;
 
 export type Category = (typeof categories)[number];

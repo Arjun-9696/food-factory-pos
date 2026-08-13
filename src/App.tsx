@@ -29,12 +29,16 @@ function CapacitorInit({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       try {
-        StatusBar.setStyle({ style: "light" as any });
+        StatusBar.setStyle({ style: "light" as never });
         StatusBar.setBackgroundColor({ color: "#ea580c" });
-      } catch (e) {}
+      } catch {
+        // Capacitor may not be available
+      }
       try {
         SplashScreen.hide();
-      } catch (e) {}
+      } catch {
+        // Capacitor may not be available
+      }
       
       document.documentElement.classList.add("platform-android");
     }
