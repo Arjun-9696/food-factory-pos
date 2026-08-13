@@ -13,6 +13,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, name?: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -26,10 +27,77 @@ export const useAuth = () => {
 
 const ADMIN_EMAIL = "urbancodersofficial@gmail.com";
 
+// Sentinel returned when Supabase requires email confirmation to be completed
+// before the account can be used. Login.tsx turns this into a friendly message.
+const CONFIRMATION_REQUIRED = "confirmation-required";
+
+const friendlyAuthError = (error: unknown, fallback: string): string => {
+  const msg = error instanceof Error ? error.message : String(error);
+  const err = (error ?? {}) as Record<string, unknown>;
+  const errCode = typeof err.code === "string" ? err.code : undefined;
+  const errStatus = typeof err.status === "number" ? err.status : undefined;
+
+  if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+    return "Cannot reach authentication server. Check your internet connection or Supabase project status.";
+  }
+  if (msg.includes("rate limit") || errCode === "429" || errStatus === 429) {
+    return "Too many attempts. Please wait 5 minutes and try again.";
+  }
+  return msg || fallback;
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const syncUserToDatabase = async (authId: string, email: string, name: string, avatarUrl: string) => {
+    try {
+      await supabase.from("users").upsert(
+        { id: authId, name, email, role: "customer" },
+        { onConflict: "id" }
+      );
+
+      await supabase.from("profiles").upsert(
+        {
+          user_id: authId,
+          full_name: name,
+          email,
+          avatar_url: avatarUrl || null,
+        },
+        { onConflict: "user_id" }
+      );
+    } catch (error) {
+      console.error("Failed to sync user to database:", error);
+    }
+  };
+
+  const applyUser = (authUser: {
+    id: string;
+    email?: string;
+    user_metadata?: {
+      name?: string;
+      full_name?: string;
+      avatar_url?: string;
+      picture?: string;
+    };
+  }) => {
+    const name =
+      authUser.user_metadata?.name ||
+      authUser.user_metadata?.full_name ||
+      authUser.email?.split("@")[0] ||
+      "";
+    const avatarUrl =
+      authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || "";
+    const isAdminEmail = (authUser.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    setUser({
+      id: authUser.id,
+      email: authUser.email || "",
+      name,
+    });
+    setIsAdmin(isAdminEmail);
+    syncUserToDatabase(authUser.id, authUser.email || "", name, avatarUrl);
+  };
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
@@ -38,17 +106,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    checkCurrentUser();
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (session?.user) applyUser(session.user);
+      })
+      .catch(() => {
+        // No session
+      })
+      .finally(() => setLoading(false));
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        const isAdminEmail = session.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-        setUser({
-          id: session.user.id,
-          email: session.user.email || "",
-          name: session.user.user_metadata?.name || session.user.email?.split("@")[0] || "",
-        });
-        setIsAdmin(isAdminEmail);
+        applyUser(session.user);
       } else {
         setUser(null);
         setIsAdmin(false);
@@ -57,25 +129,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const checkCurrentUser = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const isAdminEmail = session.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-        setUser({
-          id: session.user.id,
-          email: session.user.email || "",
-          name: session.user.user_metadata?.name || session.user.email?.split("@")[0] || "",
-        });
-        setIsAdmin(isAdminEmail);
-      }
-    } catch {
-      // No session
-    }
-    setLoading(false);
-  };
 
   const signUp = async (email: string, password: string, name?: string) => {
     try {
@@ -93,87 +148,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        const err = error as unknown as Record<string, unknown>;
+        if (String(error.message).includes("already registered") || err.code === "user_already_exists") {
+          return { error: "An account with this email already exists. Please sign in instead." };
+        }
+        return { error: friendlyAuthError(error, "Signup failed. Please try again.") };
+      }
 
-      if (data.user) {
-        const isAdminEmail = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-        setUser({
-          id: data.user.id,
-          email: data.user.email || email,
-          name: name || email.split("@")[0],
-        });
-        setIsAdmin(isAdminEmail);
+      if (!data.user) {
+        return { error: "Signup failed. Please try again." };
+      }
+
+      if (data.session) {
+        applyUser(data.user);
         return { error: null };
       }
 
-      return { error: "Signup failed. Please try again." };
+      // Email confirmation is enabled on the Supabase project: the user must
+      // click the confirmation link before the account becomes active.
+      return { error: CONFIRMATION_REQUIRED };
     } catch (error: unknown) {
       console.error("Signup error:", error);
-      const msg = error instanceof Error ? error.message : String(error);
-      const errCode = error && typeof error === "object" ? (error as Record<string, string>).code : undefined;
-      if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
-        return { error: "Cannot reach authentication server. Check your internet connection or Supabase project status." };
-      }
-      if (msg.includes("rate limit") || errCode === "429") {
-        return { error: "Too many attempts. Please wait 5 minutes and try again." };
-      }
-      if (msg.includes("already registered") || errCode === "user_already_exists") {
-        return { error: "An account with this email already exists. Please sign in instead." };
-      }
-      return { error: msg || "Signup failed. Please try again." };
-    }
-
-  const signIn = async (email: string, password: string) => {
-    try {
-      if (!isSupabaseConfigured()) {
-        return { error: "Supabase is not configured. Please check your environment variables." };
-      }
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      if (data.user) {
-        const isAdminEmail = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-        setUser({
-          id: data.user.id,
-          email: data.user.email || email,
-          name: data.user.user_metadata?.name || email.split("@")[0],
-        });
-        setIsAdmin(isAdminEmail);
-        return { error: null };
-      }
-
-      return { error: "Login failed. Please try again." };
-    } catch (error: unknown) {
-      console.error("Login error:", error);
-      const msg = error instanceof Error ? error.message : String(error);
-      const errCode = error && typeof error === "object" ? (error as Record<string, string>).code : undefined;
-      const errStatus = error && typeof error === "object" ? (error as Record<string, number>).status : undefined;
-      if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
-        return { error: "Cannot reach authentication server. Check your internet connection or Supabase project status." };
-      }
-      if (msg.includes("rate limit") || errCode === "429") {
-        return { error: "Too many attempts. Please wait 5 minutes and try again." };
-      }
-      if (msg.includes("Invalid login credentials") || errStatus === 400) {
-        return { error: "Invalid email or password. Please try again." };
-      }
-      if (msg.includes("Email not confirmed")) {
-        return { error: "Please confirm your email first." };
-      }
-      return { error: msg || "Login failed. Please try again." };
-    }
-      if (msg.includes("rate limit") || (error as Record<string, string>).code === "429") {
-        return { error: "Too many attempts. Please wait 5 minutes and try again." };
-      }
-      if (msg.includes("already registered") || (error as Record<string, string>).code === "user_already_exists") {
-        return { error: "An account with this email already exists. Please sign in instead." };
-      }
-      return { error: msg || "Signup failed. Please try again." };
+      return { error: friendlyAuthError(error, "Signup failed. Please try again.") };
     }
   };
 
@@ -188,40 +185,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
       });
 
-      if (error) throw error;
-
-      if (data.user) {
-        const isAdminEmail = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-        setUser({
-          id: data.user.id,
-          email: data.user.email || email,
-          name: data.user.user_metadata?.name || email.split("@")[0],
-        });
-        setIsAdmin(isAdminEmail);
-        return { error: null };
+      if (error) {
+        const err = error as unknown as Record<string, unknown>;
+        if (String(error.message).includes("Invalid login credentials") || err.status === 400) {
+          return { error: "Invalid email or password. Please try again." };
+        }
+        if (String(error.message).includes("Email not confirmed")) {
+          return { error: CONFIRMATION_REQUIRED };
+        }
+        return { error: friendlyAuthError(error, "Login failed. Please try again.") };
       }
 
-      return { error: "Login failed. Please try again." };
-    } catch (error: any) {
+      if (!data.user) {
+        return { error: "Login failed. Please try again." };
+      }
+
+      applyUser(data.user);
+      return { error: null };
+    } catch (error: unknown) {
       console.error("Login error:", error);
-      if (error.message?.includes("Failed to fetch") || error.message?.includes("NetworkError")) {
-        return { error: "Cannot reach authentication server. Check your internet connection or Supabase project status." };
+      return { error: friendlyAuthError(error, "Login failed. Please try again.") };
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    try {
+      if (!isSupabaseConfigured()) {
+        return { error: "Supabase is not configured. Please check your environment variables." };
       }
-      if (error.message?.includes("rate limit") || error.code === "429") {
-        return { error: "Too many attempts. Please wait 5 minutes and try again." };
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+
+      if (error) {
+        return { error: friendlyAuthError(error, "Google sign-in failed. Please try again.") };
       }
-      if (error.message?.includes("Invalid login credentials") || error.status === 400) {
-        return { error: "Invalid email or password. Please try again." };
-      }
-      if (error.message?.includes("Email not confirmed")) {
-        return { error: "Please confirm your email first." };
-      }
-      if (error.message?.includes("session is active")) {
-        // Already logged in, refresh the page
-        window.location.reload();
-        return { error: null };
-      }
-      return { error: error.message || "Login failed. Please try again." };
+
+      return { error: null };
+    } catch (error: unknown) {
+      console.error("Google sign-in error:", error);
+      return { error: friendlyAuthError(error, "Google sign-in failed. Please try again.") };
     }
   };
 
@@ -236,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, isAdmin, loading, signIn, signUp, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );

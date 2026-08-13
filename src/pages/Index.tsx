@@ -361,7 +361,6 @@ function POSContent() {
         {totalItems > 0 && (
           <>
             <CartFAB onClick={() => setCartOpen(true)} />
-            <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
             {flyingItems.map((item) => (
               <FlyToCart
                 key={item.id}
@@ -386,9 +385,7 @@ function POSContent() {
           </>
         )}
         
-        {isMobile && (
-          <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
-        )}
+        <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
 
         <footer className="hidden md:block border-t bg-background/80 backdrop-blur-sm">
           <div className="container mx-auto px-4 py-3 text-center">

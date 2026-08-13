@@ -167,7 +167,7 @@ export function SearchResults({
 
           <div className="overflow-y-auto scrollbar-hide p-2 space-y-1 max-h-[400px]">
             {searchResults.length > 0 ? (
-              <AnimatePresence mode="popLayout">
+              <div>
                 {searchResults.map((item, index) => (
                   <motion.div
                     key={item.id}
@@ -186,7 +186,7 @@ export function SearchResults({
                     />
                   </motion.div>
                 ))}
-              </AnimatePresence>
+              </div>
             ) : (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -271,7 +271,7 @@ export function MobileSearchResults({
 
           <div className="overflow-y-auto scrollbar-hide p-2 space-y-1 max-h-[calc(70vh-60px)]">
             {searchResults.length > 0 ? (
-              <AnimatePresence mode="popLayout">
+              <div>
                 {searchResults.map((item, index) => (
                   <motion.div
                     key={item.id}
@@ -290,7 +290,7 @@ export function MobileSearchResults({
                     />
                   </motion.div>
                 ))}
-              </AnimatePresence>
+              </div>
             ) : (
               <motion.div
                 initial={{ opacity: 0 }}

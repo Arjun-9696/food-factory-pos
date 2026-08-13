@@ -3,7 +3,7 @@
 ## Option 1: Run SQL via Supabase Dashboard
 
 1. Go to your Supabase project dashboard: https://supabase.com/dashboard
-2. Select your project: `oyeehgdufyttqxcstdel`
+2. Select your project: `qitjiuprsojbvrfbdnov`
 3. Click on "SQL Editor" in the left sidebar
 4. Copy the contents of `scripts/supabase-schema.sql`
 5. Paste into the SQL Editor
@@ -16,7 +16,7 @@
 npm install -g supabase
 
 # Link to your project
-supabase link --project-ref oyeehgdufyttqxcstdel
+supabase link --project-ref qitjiuprsojbvrfbdnov
 
 # Run the migration
 supabase db push
@@ -24,7 +24,7 @@ supabase db push
 
 Or run the SQL file directly:
 ```bash
-supabase db execute --project-ref oyeehgdufyttqxcstdel -f scripts/supabase-schema.sql
+supabase db execute --project-ref qitjiuprsojbvrfbdnov -f scripts/supabase-schema.sql
 ```
 
 ## Option 3: Use psql
@@ -33,7 +33,7 @@ supabase db execute --project-ref oyeehgdufyttqxcstdel -f scripts/supabase-schem
 # Get connection string from Supabase dashboard
 # Settings > Database > Connection string
 
-psql "postgresql://postgres:[YOUR-PASSWORD]@db.oyeehgdufyttqxcstdel.supabase.co:5432/postgres" -f scripts/supabase-schema.sql
+psql "postgresql://postgres:[YOUR-PASSWORD]@db.qitjiuprsojbvrfbdnov.supabase.co:5432/postgres" -f scripts/supabase-schema.sql
 ```
 
 ## Tables Created

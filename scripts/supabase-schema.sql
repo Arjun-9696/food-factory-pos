@@ -174,6 +174,11 @@ ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 
+-- Users: Each user can insert/read/update their own row (id = auth.uid())
+CREATE POLICY "Users can insert own row" ON public.users FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can read own row" ON public.users FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own row" ON public.users FOR UPDATE USING (auth.uid() = id);
+
 -- Profiles: Users can read/write their own profile
 CREATE POLICY "Users can read all profiles" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = user_id);
