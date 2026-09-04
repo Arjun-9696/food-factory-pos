@@ -44,9 +44,9 @@ export function recordOrderTimestamp(
 }
 
 /** Merge locally-stored timestamps into an order fetched from the DB. */
-export function mergeOrderTimestamps<T extends Record<string, unknown>>(order: T): T {
+export function mergeOrderTimestamps<T extends object>(order: T): T {
   const all = readAll();
-  const local = all[order.id as string];
+  const local = all[(order as { id?: unknown }).id as string];
   if (!local) return order;
 
   const fields: TimestampField[] = [
@@ -57,12 +57,12 @@ export function mergeOrderTimestamps<T extends Record<string, unknown>>(order: T
     "cancelled_at",
   ];
 
-  const merged = { ...order };
+  const merged = { ...order } as Record<string, unknown>;
   for (const f of fields) {
     // Local wins only when the DB value is null/undefined
     if (!merged[f] && local[f]) {
-      merged[f] = local[f] as T[Extract<keyof T, string>];
+      merged[f] = local[f];
     }
   }
-  return merged;
+  return merged as T;
 }

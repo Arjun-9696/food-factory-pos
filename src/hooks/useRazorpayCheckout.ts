@@ -331,7 +331,7 @@ export function useRazorpayCheckout(
         return "error";
       }
     },
-    [setResult, verifyAndSettle],
+    [setResult, verifyAndSettle, resolvePaid],
   );
 
   /** Re-check a payment that may have been interrupted (e.g. after a refresh). */

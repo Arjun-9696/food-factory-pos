@@ -39,11 +39,15 @@ export async function uploadImageToCloudinary(
     }
 
     return { url: "", error: "Upload failed" };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Cloudinary upload error:", error);
+    const err = error as {
+      response?: { data?: { error?: { message?: string } } };
+      message?: string;
+    };
     return {
       url: "",
-      error: error.response?.data?.error?.message || error.message || "Upload failed",
+      error: err.response?.data?.error?.message || err.message || "Upload failed",
     };
   }
 }

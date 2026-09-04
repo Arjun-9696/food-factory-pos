@@ -447,7 +447,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     setBillData(localBill);
     setShowBill(true);
     resetAfterOrder();
-  }, [customerName, customerPhone, items, subtotal, discount, gst, grandTotal, deliveryAddress, resetAfterOrder]);
+  }, [customerName, customerPhone, items, subtotal, discount, gst, grandTotal, deliveryAddress, resetAfterOrder, coinDiscount]);
 
   const rzp = useRazorpayCheckout(handleRzpPaid);
   const rzpBusy = ["starting", "checkout-open", "verifying", "rechecking"].includes(rzp.phase);

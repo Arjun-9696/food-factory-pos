@@ -151,7 +151,7 @@ export function useCoinTransactions(page = 1, limit = 20) {
       return fetchTransactions(token, page, limit);
     },
     enabled: !!user?.id && isSupabaseConfigured(),
-    keepPreviousData: true,
+    placeholderData: (previousData) => previousData,
   });
 }
 

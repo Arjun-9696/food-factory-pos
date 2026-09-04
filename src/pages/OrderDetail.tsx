@@ -318,7 +318,7 @@ export default function OrderDetail() {
             </div>
             <div className="text-sm text-foreground">
               {formatAddressLines(
-                order.delivery_address as import("@/types/address").DeliveryAddress,
+                order.delivery_address as unknown as import("@/types/address").DeliveryAddress,
               ).map((line, i) => (
                 <p key={i}>{line}</p>
               ))}

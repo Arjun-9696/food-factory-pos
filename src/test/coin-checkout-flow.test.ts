@@ -69,7 +69,7 @@ const stubs = vi.hoisted(() => {
 type QueryChain = (() => unknown) & Record<string, (...args: never[]) => unknown>;
 
 function chain(final: unknown): unknown {
-  const target: QueryChain = () => final;
+  const target = (() => final) as unknown as QueryChain;
   target.then = (onFulfilled: (v: unknown) => unknown) => onFulfilled(final);
   const methods = [
     "select", "eq", "in", "is", "order", "or", "limit", "range",
@@ -178,7 +178,7 @@ vi.mock("../../api/lib/identity", () => {
 // ---------------------------------------------------------------------------
 
 async function run(body: Record<string, unknown>): Promise<{ statusCode: number; body: Record<string, unknown> }> {
-  const req = new PassThrough() as unknown as IncomingMessage;
+  const req = new PassThrough() as PassThrough & IncomingMessage;
   req.method = "POST";
   req.headers = { "content-type": "application/json" };
   const captured: { statusCode?: number; body?: string } = {};
@@ -216,8 +216,10 @@ beforeEach(async () => {
   stubs.state.redemptionInput = null;
   stubs.state.createdRazorpayOrders = [];
 
-  const identity = await import("../../api/lib/identity");
-  identity.__identityState.override = null;
+  const identity = (await import("../../api/lib/identity")) as unknown as {
+    __identityState?: { override: null | { authenticated: boolean; userId?: string; name?: string; phone?: string; accessToken?: string } };
+  };
+  identity.__identityState!.override = null;
 
   const coins = await import("../../api/lib/coins");
   vi.mocked(coins.validateRedemption).mockReset();
@@ -371,8 +373,10 @@ describe("Food Factory Coins checkout — Razorpay involvement is server-control
 
   it("useCoins requested but identity not authenticated → COINS_UNAVAILABLE error, NO Razorpay", async () => {
     stubs.state.productsResult = productsByName("P60", 60);
-    const identity = await import("../../api/lib/identity");
-    identity.__identityState.override = { authenticated: false };
+    const identity = (await import("../../api/lib/identity")) as unknown as {
+      __identityState?: { override: null | { authenticated: boolean; userId?: string; name?: string; phone?: string; accessToken?: string } };
+    };
+    identity.__identityState!.override = { authenticated: false };
 
     const { statusCode, body } = await run({
       ...baseBody([{ productId: P60, quantity: 1 }]),

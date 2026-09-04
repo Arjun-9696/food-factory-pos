@@ -67,15 +67,6 @@ export function AdminOrderTimeline({
   cancelledAt,
 }: AdminOrderTimelineProps) {
   const isCancelled = status === "cancelled";
-  const cancelledIndex = isCancelled
-    ? ORDER_STATUS_PROGRESS.indexOf(
-        status === "cancelled"
-          ? (["pending", "preparing", "ready", "completed"] as OrderStatus[]).findIndex(
-              (s) => !s,
-            ) || 0
-          : status,
-      )
-    : -1;
 
   // Build timeline steps — only include steps up to current/cancelled state
   const currentIdx = ORDER_STATUS_PROGRESS.indexOf(status);

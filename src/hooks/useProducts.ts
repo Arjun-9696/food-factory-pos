@@ -36,7 +36,7 @@ export function useProducts() {
       const dbCategoryNames = new Set<string>();
 
       if (data && data.length > 0) {
-        data.forEach((doc: any) => {
+        data.forEach((doc: { name?: string; emoji?: string }) => {
           if (doc.name) {
             dbCategoryNames.add(doc.name);
             dbNames.push(doc.name);

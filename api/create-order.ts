@@ -224,9 +224,15 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   try {
     // ---- Idempotency: re-use an already-created pending Razorpay order. ----
     const existing = await findPaymentByTransactionId(transactionId);
+    // We purposefully store the coin flag in a function-scoped variable rather
+    // than only inside the `if (existing)` block: the zero-value coin path below
+    // must also know whether a prior attempt left a pending coin record so a
+    // retry reuses it instead of double-processing the transaction.
+    const isCoinRecord =
+      existing != null &&
+      ((existing.metadata ?? {}) as Record<string, unknown>).payment_method ===
+        "FOOD_FACTORY_COINS";
     if (existing) {
-      const meta = (existing.metadata ?? {}) as Record<string, unknown>;
-      const isCoinRecord = meta.payment_method === "FOOD_FACTORY_COINS";
       if (existing.payment_status === "paid") {
         if (isCoinRecord && existing.ff_order_number) {
           // Zero-value coin order already placed — return it idempotently.

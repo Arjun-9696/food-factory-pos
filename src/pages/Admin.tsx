@@ -230,7 +230,7 @@ export default function Admin() {
         const emojis: Record<string, string> = { ...CATEGORY_EMOJI_MAP };
         const ids: Record<string, string> = {};
         
-        data.forEach((doc: any) => {
+        data.forEach((doc: { name?: string; emoji?: string; id?: string }) => {
           if (doc.name) {
             emojis[doc.name] = doc.emoji || CATEGORY_EMOJI_MAP[doc.name] || "🍴";
             ids[doc.name] = doc.id;
@@ -276,8 +276,9 @@ export default function Admin() {
       console.log("Database ready!");
       setDbStatus("ready");
       return true;
-    } catch (error: any) {
-      console.log("Database not ready:", error.message);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.log("Database not ready:", msg);
       setDbStatus("error");
       return false;
     }
@@ -307,7 +308,7 @@ export default function Admin() {
       
       console.log("Admin products fetched:", data?.length);
       
-      const productsList = (data || []).map((doc: any) => ({
+      const productsList = (data || []).map((doc: { food_type?: string; image?: string; [key: string]: unknown }) => ({
         ...doc,
         foodType: doc.food_type || "veg",
         image: doc.image || "",
@@ -315,8 +316,9 @@ export default function Admin() {
       
       setProducts(productsList);
       extractCategories(productsList);
-    } catch (error: any) {
-      console.log("Fetch error:", error.message);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.log("Fetch error:", msg);
       setProducts([]);
       setCategories(["All", ...DEFAULT_CATEGORIES]);
     }
@@ -428,9 +430,10 @@ export default function Admin() {
       setForm(prev => ({ ...prev, image: url, imagePreview: tempPreview }));
       toast.success("Image uploaded!");
       if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (err: any) {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error("Storage upload failed:", err);
-      toast.error(err.message || "Failed to upload image");
+      toast.error(msg || "Failed to upload image");
     } finally {
       setUploading(false);
     }
@@ -498,8 +501,9 @@ export default function Admin() {
       }
       cancelEdit();
       setTimeout(() => fetchProducts(), 100);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to save");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error(msg || "Failed to save");
     }
   };
 

@@ -494,35 +494,49 @@ export async function finalizePaidPayment(
   // WhatsApp invoice — best effort, idempotent, never affects success.
   await ensureInvoiceAttempted(record, payment, orderNumber);
 
-  // Confirm coin redemption if coins were used — best effort, never blocks success.
+  // Settle coin redemption for an ONLINE (Razorpay-gated) order, if the
+  // customer opted in. Runs atomically + idempotently via ff_redeem_coins_service
+  // (row-locked, one REDEMPTION per order), so concurrent verify-payment +
+  // webhook calls can never deduct the wallet twice and a balance that changed
+  // after checkout can never be over-drafted.
+  //
+  // The coin amount is the AUTHORITATIVE snapshot.coinDiscount captured at
+  // checkout (1 coin = ₹1) — never recomputed from the live wallet or browser.
+  // The order's coin_discount was already persisted at create/settlement and is
+  // NOT overwritten here.
   if (record.metadata?.coin_redemption && record.metadata.customer_user_id) {
     try {
-      const { redeemCoins, confirmRedemption } = await import("./coins");
+      const { redeemCoinsForPlacedOrder } = await import("./coins");
       const coinInfo = record.metadata.coin_redemption as { userId: string; discountAmount: number };
-      // Fetch the order subtotal to calculate coins to use
       const { data: orderRow } = await getServerSupabase()
         .from("orders")
-        .select("subtotal")
+        .select("id")
         .eq("order_number", orderNumber)
         .maybeSingle();
-      const orderSubtotal = orderRow?.subtotal ?? 0;
-      const redemptionResult = await redeemCoins(coinInfo.userId, orderSubtotal);
-      if (redemptionResult.success && redemptionResult.redemptionId) {
-        // Fetch the order ID to link to the redemption
-        const { data: orderData } = await getServerSupabase()
-          .from("orders")
-          .select("id")
-          .eq("order_number", orderNumber)
-          .maybeSingle();
-        if (orderData) {
-          await confirmRedemption(redemptionResult.redemptionId, orderData.id);
-          // Update the order with coin redemption info
-          await getServerSupabase()
-            .from("orders")
-            .update({ coin_discount: redemptionResult.discountAmount })
-            .eq("id", orderData.id);
+      const orderId = orderRow?.id;
+      if (!orderId) {
+        console.error("[COIN_REDEMPTION_SKIPPED] Order row not found for settlement");
+      } else {
+        const coinsToUse = Math.round(snapshot.coinDiscount ?? 0);
+        const discountAmount = snapshot.coinDiscount ?? 0;
+        const redemption = await redeemCoinsForPlacedOrder({
+          userId: coinInfo.userId,
+          coinsToUse,
+          orderId,
+          orderNumber,
+          discountAmount,
+        });
+        if (redemption.success) {
+          console.log(
+            `[COIN_REDEMPTION_CONFIRMED] Order ${orderNumber}: ${coinsToUse} coins redeemed (new balance ${redemption.newBalance})`,
+          );
+        } else {
+          // The order is already confirmed and the cart cleared; a redemption
+          // failure is logged for admin review but never fails the order.
+          console.error(
+            `[COIN_REDEMPTION_FAILED] Order ${orderNumber}: ${redemption.code ?? "unknown"} — admin review required`,
+          );
         }
-        console.log(`[COIN_REDEMPTION_CONFIRMED] Order ${orderNumber}: ${redemptionResult.coinsUsed} coins used for ₹${redemptionResult.discountAmount} discount`);
       }
     } catch (err) {
       console.error("[COIN_REDEMPTION_FAILED] Best effort — order still confirmed:", err);

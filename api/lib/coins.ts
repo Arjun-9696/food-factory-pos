@@ -565,6 +565,57 @@ export async function redeemCoinsAtomicForOrder(input: {
   }
 }
 
+/**
+ * Idempotent, atomic coin redemption for an ONLINE-gated (Razorpay-settled)
+ * order. Runs under the SERVER's service-role key via ff_redeem_coins_service
+ * (SECURITY DEFINER, row-locked, one REDEMPTION per order) — so concurrent
+ * verify-payment + webhook calls can never deduct the wallet twice.
+ *
+ * All inputs come from the authoritative payment snapshot captured at checkout
+ * (NOT recomputed from the live wallet or the browser). 1 coin = ₹1.
+ *
+ * Returns the post-redemption balance, or { success: false, code } when the
+ * wallet could not cover the snapshot amount (e.g. an order settled after the
+ * balance was spent elsewhere) or the order was already redeemed.
+ */
+export async function redeemCoinsForPlacedOrder(input: {
+  userId: string;
+  coinsToUse: number;
+  orderId: string;
+  orderNumber: string;
+  discountAmount: number;
+}): Promise<AtomicRedemptionResult> {
+  const coinsToUse = Math.floor(input.coinsToUse);
+  if (!input.userId || coinsToUse <= 0) {
+    return { success: false, newBalance: 0, code: "INVALID_COINS" };
+  }
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase.rpc("ff_redeem_coins_service", {
+      p_user_id: input.userId,
+      p_coins: coinsToUse,
+      p_order_id: input.orderId,
+      p_order_number: input.orderNumber,
+      p_discount_amount: input.discountAmount,
+    });
+    if (error) {
+      const raw = String(error.message ?? error.code ?? "");
+      const code = RPC_SENTINELS.includes(raw) ? raw : "REDEMPTION_FAILED";
+      return { success: false, newBalance: 0, code };
+    }
+    if (typeof data !== "number") {
+      return { success: false, newBalance: 0, code: "REDEMPTION_FAILED" };
+    }
+    return { success: true, newBalance: data };
+  } catch (err) {
+    return {
+      success: false,
+      newBalance: 0,
+      code: err instanceof Error ? err.message : "REDEMPTION_FAILED",
+    };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // confirmRedemption — mark redemption as APPLIED after order is created
 // ---------------------------------------------------------------------------

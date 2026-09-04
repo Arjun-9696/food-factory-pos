@@ -191,8 +191,8 @@ export default function Orders() {
           ready_at: order.ready_at || null,
           completed_at: order.completed_at || null,
           cancelled_at: order.cancelled_at || null,
-        } as Order[];
-        return mergeOrderTimestamps(withItems);
+        };
+        return mergeOrderTimestamps(withItems as Order);
       });
       
       setOrders(fetched);
