@@ -47,16 +47,26 @@ function paymentApiPlugin(): Plugin {
       // Auto-restart the dev server when any file under api/ is saved.
       // Without this, the static imports above capture the handler at startup
       // and never pick up edits — the frontend HMRs but the API stays stale.
+      // Watch all node_modules-independent dirs under api/ by absolute path
+      // and treat change/add as triggers (debounced so a multi-file save
+      // restarts once).
+      const apiRoot = path.resolve(__dirname, "api");
       let apiRestartTimer: ReturnType<typeof setTimeout> | null = null;
-      server.watcher.add(path.resolve("api"));
-      server.watcher.on("change", (changedPath) => {
-        if (!changedPath.includes(path.join("api", path.sep))) return;
+      const scheduleRestart = (changedPath: string) => {
+        const rel = path.relative(apiRoot, changedPath);
+        // Only care about files actually under the api/ directory.
+        if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return;
         if (apiRestartTimer) clearTimeout(apiRestartTimer);
         apiRestartTimer = setTimeout(() => {
           console.log(`[payment-api] ${path.basename(changedPath)} changed — restarting dev server`);
           server.restart();
-        }, 300);
-      });
+          apiRestartTimer = null;
+        }, 250);
+      };
+      server.watcher.add(apiRoot);
+      server.watcher.on("change", scheduleRestart);
+      server.watcher.on("add", scheduleRestart);
+      server.watcher.on("unlink", scheduleRestart);
 
       server.middlewares.use((req, res, next) => {
         const url = (req.url || "").split("?")[0];
