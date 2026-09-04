@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { CartProvider, useCart } from "@/context/CartContext";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useProducts } from "@/hooks/useProducts";
@@ -17,6 +18,7 @@ import { MobileSearchResults, SearchResults } from "@/components/pos/MobileSearc
 import { FlyToCart, useFlyToCart } from "@/components/pos/FlyToCart";
 import { LayoutGrid, List, ArrowUpDown } from "lucide-react";
 import { getCategoryEmoji } from "@/data/categories";
+import { productSlug } from "@/lib/slug";
 import {
   Select,
   SelectContent,
@@ -47,9 +49,12 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 function POSContent() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [isDark, toggleDark] = useDarkMode();
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
+  // Deep-link support: /?category=Burgers pre-selects a category (used by PDP breadcrumbs).
+  const [activeCategory, setActiveCategory] = useState(() => searchParams.get("category") || "All");
   const [cartOpen, setCartOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
@@ -317,10 +322,11 @@ function POSContent() {
               <>
                 <div className="grid grid-cols-2 gap-3">
                   {visibleProducts.map((item) => (
-                    <ProductCard 
-                      key={item.id} 
+                    <ProductCard
+                      key={item.id}
                       item={item}
-                      onAddPosition={(pos) => triggerFlyToCart(pos, item.foodType === "veg" ? "#22c55e" : item.foodType === "egg" ? "#eab308" : "#ef4444")} 
+                      onAddPosition={(pos) => triggerFlyToCart(pos, item.foodType === "veg" ? "#22c55e" : item.foodType === "egg" ? "#eab308" : "#ef4444")}
+                      onOpen={() => navigate(`/product/${productSlug(item.name, item.id)}`)}
                     />
                   ))}
                 </div>
@@ -348,9 +354,10 @@ function POSContent() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
               {filtered.map((item, idx) => (
                 <div key={item.id} style={{ animationDelay: `${idx * 30}ms` }}>
-                  <ProductCard 
+                  <ProductCard
                     item={item}
-                    onAddPosition={(pos) => triggerFlyToCart(pos, item.foodType === "veg" ? "#22c55e" : item.foodType === "egg" ? "#eab308" : "#ef4444")} 
+                    onAddPosition={(pos) => triggerFlyToCart(pos, item.foodType === "veg" ? "#22c55e" : item.foodType === "egg" ? "#eab308" : "#ef4444")}
+                    onOpen={() => navigate(`/product/${productSlug(item.name, item.id)}`)}
                   />
                 </div>
               ))}

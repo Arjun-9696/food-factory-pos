@@ -1,22 +1,19 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Plus, Minus, Trash2, ShoppingBag, Printer, Tag, Send, Loader2, QrCode, User, Phone, CheckCircle } from "lucide-react";
+import { X, Plus, Minus, Trash2, ShoppingBag, Tag, Loader2, User, Phone, CheckCircle, CreditCard, ShieldCheck, MapPin, Locate, Navigation, Coins } from "lucide-react";
 
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { supabase, SUPABASE_CONFIG } from "@/lib/supabaseClient";
+import { useRazorpayCheckout } from "@/hooks/useRazorpayCheckout";
+import { supabase } from "@/lib/supabaseClient";
+import { paymentsApi } from "@/lib/razorpay";
+import { normalizeIndianPhone } from "@/lib/phone";
+import { composeFullAddress, formatAddressLines, isDeliveryAddressValid, loadGuestAddress, saveGuestAddress } from "@/lib/address";
+import { deliveryChargeForAddress } from "@/lib/delivery";
+import type { DeliveryAddress } from "@/types/address";
+import { CoinRedemptionSection } from "@/components/coins/CoinRedemptionSection";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
-import { motion } from "motion/react";
-import { PaymentQR } from "./PaymentQR";
-import { Logo } from "./Logo";
-import {
-  ExpandableScreen,
-  ExpandableScreenContent,
-  ExpandableScreenTrigger,
-} from "@/components/ui/expandable-screen";
-import { browserNotification } from "@/lib/notifications";
-import { downloadBillPDF } from "@/lib/billGenerator";
 
 const triggerConfetti = () => {
   const colors = ["#ff6a00", "#ff9a00", "#ffd54f", "#ff3d00"];
@@ -53,199 +50,77 @@ interface CartDrawerProps {
   onClose: () => void;
 }
 
-function QRPaymentPanel({ grandTotal, orderNumber, onPaid, saving }: {
-  grandTotal: number;
+interface BillItem {
+  name: string;
+  price: number;
+  quantity: number;
+}
+
+interface BillData {
   orderNumber: string;
-  onPaid: () => Promise<void>;
-  saving: boolean;
-}) {
-  const [paying, setPaying] = useState(false);
+  customerName: string;
+  customerPhone: string;
+  items: BillItem[];
+  subtotal: number;
+  discount: number;
+  gst: number;
+  delivery: number;
+  grandTotal: number;
+  deliveryAddress?: DeliveryAddress | null;
+  razorpayPaymentId?: string | null;
+  whatsappInvoiceStatus?: string | null;
+  /** Remaining coin balance after the order settles (coin checkouts). */
+  remainingCoins?: number;
+  /** Coins redeemed against this order (captured at settlement). */
+  coinsUsed?: number;
+  /** Payment method actually used ("razorpay" | "FOOD_FACTORY_COINS"). */
+  paymentMethod?: string;
+}
 
-  const handlePaid = async () => {
-    setPaying(true);
-    await onPaid();
-    setPaying(false);
+interface AddressFormState {
+  houseNumber: string;
+  street: string;
+  area: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+const EMPTY_ADDRESS_FORM: AddressFormState = {
+  houseNumber: "",
+  street: "",
+  area: "",
+  city: "",
+  state: "",
+  postalCode: "",
+  country: "India",
+  latitude: null,
+  longitude: null,
+};
+
+function addressToFormState(address: DeliveryAddress | null | undefined): AddressFormState {
+  if (!address) return EMPTY_ADDRESS_FORM;
+  return {
+    houseNumber: address.houseNumber || "",
+    street: address.street || "",
+    area: address.area || "",
+    city: address.city || "",
+    state: address.state || "",
+    postalCode: address.postalCode || "",
+    country: address.country || "India",
+    latitude: address.latitude,
+    longitude: address.longitude,
   };
-
-  return (
-    <div className="flex flex-col overflow-y-auto max-h-[90vh]">
-      <div className="flex items-center justify-center pt-4 pb-2">
-        <span className="px-5 py-1.5 rounded-full cart-gradient text-white font-bold text-base shadow-md shadow-orange-500/20">
-          Pay ₹{grandTotal}
-        </span>
-      </div>
-
-      <PaymentQR grandTotal={grandTotal} orderNumber={orderNumber} />
-
-      <div className="px-4 pb-6 pt-2 flex-shrink-0">
-        <button
-          onClick={handlePaid}
-          disabled={paying || saving}
-          className="w-full py-3.5 rounded-xl cart-gradient text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 transition-transform active:scale-95 disabled:opacity-50"
-        >
-          {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : "✅"}
-          Payment Done — Complete Order
-        </button>
-      </div>
-    </div>
-  );
 }
 
-function formatBillText(
-  orderNumber: string,
-  customerName: string,
-  customerPhone: string,
-  items: { item: { name: string; price: number }; quantity: number }[],
-  subtotal: number, discount: number, gst: number, grandTotal: number,
-) {
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-  const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-  
-  let text = `🍔 *Food Factory - The Quality Taste*\n`;
-  text += `📋 Order: *${orderNumber}*\n`;
-  text += `📅 ${dateStr} • ${timeStr}\n`;
-  
-  if (customerName) {
-    text += `👤 Customer: ${customerName}\n`;
-  }
-  if (customerPhone) {
-    text += `📱 Phone: ${customerPhone}\n`;
-  }
-  
-  text += `━━━━━━━━━━━━━━━━\n`;
-  items.forEach((ci) => { 
-    text += `${ci.quantity}x ${ci.item.name} — ₹${ci.item.price * ci.quantity}\n`; 
-  });
-  text += `━━━━━━━━━━━━━━━━\n`;
-  text += `Subtotal: ₹${subtotal}\n`;
-  if (discount > 0) text += `Discount: -₹${discount}\n`;
-  text += `GST (5%): ₹${gst}\n`;
-  text += `*Grand Total: ₹${grandTotal}*\n`;
-  text += `━━━━━━━━━━━━━━━━\n`;
-  text += `Thank you! Visit again 🙏`;
-  return text;
-}
-
-function generateBillHTML(
-  orderNumber: string,
-  customerName: string,
-  customerPhone: string,
-  items: { item: { name: string; price: number }; quantity: number }[],
-  subtotal: number, discount: number, gst: number, grandTotal: number,
-) {
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-  const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Food Factory - Bill ${orderNumber}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 15px; font-size: 11px; line-height: 1.4; max-width: 300px; margin: 0 auto; padding-top: 60px; }
-    .top-bar { position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(135deg, #22c55e, #16a34a); padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; z-index: 9999; }
-    .success-text { color: white; font-weight: bold; font-size: 14px; }
-    .close-btn { background: white; color: #22c55e; border: none; padding: 8px 20px; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.3s ease; }
-    .close-btn:hover { background: #f0f0f0; transform: scale(1.05); }
-    .close-btn:active { transform: scale(0.95); }
-    .bill-content { transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); opacity: 1; transform: scale(1); }
-    .bill-content.closing { opacity: 0; transform: scale(0.8) translateY(-20px); }
-    .header { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px dashed #f97316; }
-    .logo { width: 50px; height: 50px; background: linear-gradient(135deg, #f97316, #fbbf24); border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
-    .logo span { color: white; font-weight: bold; font-size: 18px; }
-    .brand { font-size: 18px; font-weight: 800; color: #f97316; }
-    .tagline { font-size: 8px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
-    .order-info { display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 10px; }
-    .order-number { font-size: 14px; font-weight: bold; }
-    .customer-info { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 10px; color: #555; }
-    .items { margin-bottom: 10px; }
-    .item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dotted #eee; }
-    .item:last-child { border-bottom: none; }
-    .item-qty { color: #666; margin-right: 8px; font-weight: 500; }
-    .item-name { flex: 1; }
-    .item-price { font-weight: 500; }
-    .totals { border-top: 2px dashed #f97316; padding-top: 10px; margin-top: 5px; }
-    .total-row { display: flex; justify-content: space-between; padding: 3px 0; }
-    .grand-total { font-size: 16px; font-weight: 800; border-top: 1px solid #333; padding-top: 8px; margin-top: 5px; color: #f97316; }
-    .footer { text-align: center; margin-top: 15px; padding-top: 10px; border-top: 2px dashed #f97316; color: #666; font-size: 10px; }
-    .footer p { margin: 2px 0; }
-    @media print { .top-bar { display: none; } body { padding-top: 0; } }
-  </style>
-  <script>
-    function closeBill() {
-      const content = document.getElementById('billContent');
-      const topBar = document.querySelector('.top-bar');
-      content.classList.add('closing');
-      topBar.style.opacity = '0';
-      topBar.style.transform = 'scale(0.8)';
-      setTimeout(function() {
-        window.close();
-      }, 400);
-    }
-  </script>
-</head>
-<body>
-  <div class="top-bar">
-    <span class="success-text">✓ Order Placed!</span>
-    <button class="close-btn" onclick="closeBill()">Close</button>
-  </div>
-  <div class="bill-content" id="billContent">
-    <div class="header">
-      <div class="logo"><img src="/foodfactory.png" style="width:50px;height:50px;border-radius:10px;" /></div>
-      <div class="brand">Food Factory</div>
-      <div class="tagline">The Quality Taste</div>
-    </div>
-  <div class="header">
-    <div class="logo"><img src="/foodfactory.png" style="width:50px;height:50px;border-radius:10px;" /></div>
-    <div class="brand">Food Factory</div>
-    <div class="tagline">The Quality Taste</div>
-  </div>
-  
-  <div class="order-info">
-    <div>
-      <div class="order-number">#${orderNumber}</div>
-      <div>${dateStr} • ${timeStr}</div>
-    </div>
-  </div>
-  
-  ${customerName || customerPhone ? `
-  <div class="customer-info">
-    ${customerName ? `<div><strong>Customer:</strong> ${customerName}</div>` : ''}
-    ${customerPhone ? `<div><strong>Phone:</strong> ${customerPhone}</div>` : ''}
-  </div>
-  ` : ''}
-  
-  <div class="items">
-    ${items.map(ci => `
-      <div class="item">
-        <div>
-          <span class="item-qty">${ci.quantity}x</span>
-          <span class="item-name">${ci.item.name}</span>
-        </div>
-        <span class="item-price">₹${ci.item.price * ci.quantity}</span>
-      </div>
-    `).join('')}
-  </div>
-  
-  <div class="totals">
-    <div class="total-row"><span>Subtotal</span><span>₹${subtotal}</span></div>
-    ${discount > 0 ? `<div class="total-row" style="color:#16a34a"><span>Discount</span><span>-₹${discount}</span></div>` : ''}
-    <div class="total-row"><span>GST (5%)</span><span>₹${gst}</span></div>
-    <div class="total-row grand-total"><span>Total</span><span>₹${grandTotal}</span></div>
-  </div>
-  
-  <div class="footer">
-    <p>Thank you for your visit!</p>
-    <p>Visit again 🙏</p>
-    <p style="margin-top: 5px; font-size: 8px;">Food Factory - The Quality Taste</p>
-  </div>
-  </div>
-</body>
-</html>`;
+function formStateToAddress(form: AddressFormState): DeliveryAddress {
+  return {
+    ...form,
+    fullAddress: composeFullAddress(form),
+  };
 }
 
 function saveOrderLocally(orderData: Record<string, unknown>) {
@@ -258,19 +133,22 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const navigate = useNavigate();
   const {
     items, updateQuantity, removeItem, clearCart,
-    subtotal, gst, discount, setDiscount, grandTotal,
+    subtotal, gst, discount, setDiscount, coinDiscount, setCoinDiscount,
+    grandTotal,
     totalItems,
   } = useCart();
   const { user } = useAuth();
 
   const [discountInput, setDiscountInput] = useState("");
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
-  const [saving, setSaving] = useState(false);
   const [showBill, setShowBill] = useState(false);
-  const [billData, setBillData] = useState<{orderNumber: string; customerName: string; customerPhone: string; items: any[]; subtotal: number; discount: number; gst: number; grandTotal: number} | null>(null);
-  const printRef = useRef<HTMLDivElement>(null);
+  const [billData, setBillData] = useState<BillData | null>(null);
+  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress | null>(null);
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [addressForm, setAddressForm] = useState<AddressFormState>(EMPTY_ADDRESS_FORM);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const identityAppliedForRef = useRef<string | null>(null);
 
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -281,108 +159,200 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     setDiscount(!isNaN(val) && val > 0 ? val : 0);
   }, [discountInput, setDiscount]);
 
-  const handleClear = useCallback(() => {
-    clearCart();
-    setShowClearConfirm(false);
-    setDiscountInput("");
-    setCustomerName("");
-    setCustomerPhone("");
-    onClose();
-  }, [clearCart, onClose]);
+  // Reset the coin redemption toggle whenever the user or the cart changes,
+  // so the customer re-confirms their choice per checkout session.
+  const cartSig = items.map((i) => `${i.item.id}:${i.quantity}`).join("|");
+  useEffect(() => {
+    setUseCoinsEnabled(false);
+    setCoinDiscount(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartSig, user?.id]);
 
-  const saveOrderToAppwrite = useCallback(async (): Promise<{ id: string; order_number: number }> => {
-    const now = new Date().toISOString();
+  // -------------------------------------------------------------------------
+  // Identity auto-fill: when the drawer opens for a logged-in user, pre-fill
+  // name (from the session) and phone (from their own profile). Values the
+  // customer has already typed are never overwritten.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (!open || !user) return;
+    const key = user.id;
+    if (identityAppliedForRef.current === key) return;
+    identityAppliedForRef.current = key;
 
-    // Find or create customer first
-    if (customerPhone) {
-      const { data: existingCustomer } = await supabase
-        .from("customers")
-        .select("id, total_orders, total_spent, loyalty_points")
-        .eq("phone", customerPhone)
-        .maybeSingle();
+    const identityName = user.name?.trim() || "";
+    if (identityName) setCustomerName(identityName);
 
-      if (existingCustomer) {
-        // Update existing customer
-        await supabase
-          .from("customers")
-          .update({
-            name: customerName || "Guest",
-            total_orders: (existingCustomer.total_orders || 0) + 1,
-            total_spent: (existingCustomer.total_spent || 0) + (grandTotal || 0),
-            loyalty_points: (existingCustomer.loyalty_points || 0) + Math.floor((grandTotal || 0) / 10),
-            last_order_date: now,
-            updated_at: now,
-          })
-          .eq("id", existingCustomer.id);
-      } else {
-        // Create new customer
-        const { data: newCustomer, error: customerError } = await supabase
-          .from("customers")
-          .insert({
-            name: customerName || "Guest",
-            phone: customerPhone,
-            email: null,
-            total_orders: 1,
-            total_spent: grandTotal || 0,
-            loyalty_points: Math.floor((grandTotal || 0) / 10),
-            last_order_date: now,
-            created_at: now,
-            updated_at: now,
-          })
-          .select("id")
-          .single();
-        
-        if (!customerError && newCustomer) {
-          // Customer created successfully
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("phone")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        const storedPhone = typeof data?.phone === "string" ? data.phone.trim() : "";
+        if (storedPhone) {
+          const normalized = normalizeIndianPhone(storedPhone);
+          setCustomerPhone((prev) => (prev.trim() ? prev : normalized ? normalized : storedPhone));
         }
+      } catch {
+        // Profile lookup is best-effort; checkout still works with manual entry.
       }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, user?.id]);
+
+  // -------------------------------------------------------------------------
+  // Delivery address auto-fill: signed-in users get THEIR profile address (the
+  // single source of truth); guests get the address they saved locally so it
+  // survives a refresh. Re-loaded whenever the drawer opens.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (!open) return;
+    if (user) {
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from("profiles")
+            .select("house_number, street, area, city, state, postal_code, country, latitude, longitude, full_address")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          if (data) {
+            setDeliveryAddress({
+              houseNumber: String(data.house_number ?? ""),
+              street: String(data.street ?? ""),
+              area: String(data.area ?? ""),
+              city: String(data.city ?? ""),
+              state: String(data.state ?? ""),
+              postalCode: String(data.postal_code ?? ""),
+              country: String(data.country ?? "") || "India",
+              latitude: typeof data.latitude === "number" ? data.latitude : null,
+              longitude: typeof data.longitude === "number" ? data.longitude : null,
+              fullAddress: String(data.full_address ?? ""),
+            });
+          }
+        } catch {
+          // Best effort — manual entry still works.
+        }
+      })();
+    } else {
+      setDeliveryAddress(loadGuestAddress());
     }
-    
-    const orderData = {
-      customer_name: customerName || null,
-      customer_phone: customerPhone || null,
-      subtotal: subtotal || 0, 
-      discount: discount || 0, 
-      gst: gst || 0, 
-      grand_total: grandTotal || 0,
-      status: "completed",
-      created_at: now,
-      updated_at: now,
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, user?.id]);
+
+  const openAddressEditor = useCallback(() => {
+    setAddressForm(addressToFormState(deliveryAddress));
+    setEditingAddress(true);
+  }, [deliveryAddress]);
+
+  const setAddressField = useCallback((field: keyof AddressFormState, value: string | number | null) => {
+    setAddressForm((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const persistDeliveryAddress = useCallback(async (address: DeliveryAddress) => {
+    if (!user) {
+      saveGuestAddress(address);
+      return;
+    }
     try {
-      const { data: orderResult, error: orderError } = await supabase
-        .from("orders")
-        .insert(orderData)
-        .select("id, order_number")
-        .single();
-      
-      if (orderError) {
-        console.error("Order insert error:", orderError);
-        throw new Error(orderError.message);
+      const patch = {
+        house_number: address.houseNumber,
+        street: address.street,
+        area: address.area,
+        city: address.city,
+        state: address.state,
+        postal_code: address.postalCode,
+        country: address.country,
+        latitude: address.latitude ?? 0,
+        longitude: address.longitude ?? 0,
+        full_address: address.fullAddress,
+        updated_at: new Date().toISOString(),
+      };
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (existing) {
+        await supabase.from("profiles").update(patch).eq("user_id", user.id);
+      } else {
+        await supabase.from("profiles").insert({
+          user_id: user.id,
+          full_name: user.name || "",
+          email: user.email || "",
+          ...patch,
+        });
       }
-
-      if (orderResult && items.length > 0) {
-        // Save order items
-        const orderItemsData = items.map(item => ({
-          order_id: orderResult.id,
-          product_name: item.item.name,
-          product_price: item.item.price,
-          quantity: item.quantity,
-          total: (item.item.price || 0) * (item.quantity || 1),
-        }));
-
-        await supabase
-          .from("order_items")
-          .insert(orderItemsData);
-      }
-
-      return orderResult;
-    } catch (error: any) {
-      console.error("Order save error:", error);
-      toast.error(error.message || "Failed to save order");
-      throw error;
+    } catch {
+      toast.error("Could not save the address. Please try again.");
     }
-  }, [customerName, customerPhone, subtotal, discount, gst, grandTotal, items]);
+  }, [user]);
+
+  const saveDeliveryAddress = useCallback(async () => {
+    const address = formStateToAddress(addressForm);
+    if (!isDeliveryAddressValid(address)) {
+      toast.error("Enter a complete delivery address (house/street, area, city, state and 6-digit PIN).");
+      return;
+    }
+    await persistDeliveryAddress(address);
+    setDeliveryAddress(address);
+    setEditingAddress(false);
+    toast.success("Delivery address saved.");
+  }, [addressForm, persistDeliveryAddress]);
+
+  const getCurrentLocation = useCallback(async () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
+      return;
+    }
+    setGettingLocation(true);
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        });
+      });
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      setAddressForm((prev) => ({ ...prev, latitude: lat, longitude: lng }));
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+        );
+        const data = await response.json();
+        if (data.address) {
+          setAddressForm((prev) => ({
+            ...prev,
+            houseNumber: data.address.house_number || prev.houseNumber,
+            street: data.address.road || prev.street,
+            area: data.address.suburb || data.address.neighbourhood || prev.area,
+            city: data.address.city || data.address.town || data.address.village || prev.city,
+            state: data.address.state || prev.state,
+            postalCode: data.address.postcode || prev.postalCode,
+            country: data.address.country || prev.country,
+          }));
+          toast.success("Location detected!");
+        }
+      } catch {
+        toast.success(`Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+      }
+    } catch (error: unknown) {
+      const err = error as GeolocationPositionError;
+      if (err.code === err.PERMISSION_DENIED) {
+        toast.error("Location permission denied. Please enable location access.");
+      } else if (err.code === err.POSITION_UNAVAILABLE) {
+        toast.error("Location information unavailable.");
+      } else if (err.code === err.TIMEOUT) {
+        toast.error("Location request timed out.");
+      } else {
+        toast.error("Failed to get location.");
+      }
+    } finally {
+      setGettingLocation(false);
+    }
+  }, []);
 
   const resetAfterOrder = useCallback(() => {
     clearCart();
@@ -391,37 +361,157 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     setCustomerPhone("");
   }, [clearCart]);
 
-  const handlePrint = useCallback(async () => {
+  // -------------------------------------------------------------------------
+  // Razorpay online payment (Standard Checkout)
+  // -------------------------------------------------------------------------
+  const recheckedOnOpenRef = useRef(false);
+
+  // Called ONLY after the server verifies the payment signature + captured
+  // status. The success screen renders the SERVER-STORED order details when
+  // available; local cart state is only a fallback. The cart is cleared here
+  // — never before payment is confirmed.
+  const handleRzpPaid = useCallback(
+    async (orderNumber: string, razorpayOrderId?: string, remainingCoins?: number) => {
+    if (items.length === 0) return;
+    const currentDelivery = deliveryChargeForAddress(deliveryAddress).charge;
+    const currentGrandTotal = grandTotal + currentDelivery;
+    try {
+      saveOrderLocally({
+        order_number: orderNumber,
+        customer_name: customerName || null,
+        customer_phone: customerPhone || null,
+        subtotal,
+        discount,
+        gst,
+        delivery: currentDelivery,
+        grand_total: currentGrandTotal,
+        delivery_address: deliveryAddress,
+        status: "paid",
+        payment_method: "razorpay",
+        created_at: new Date().toISOString(),
+        items: items.map(ci => ({
+          product_name: ci.item.name,
+          product_price: ci.item.price,
+          quantity: ci.quantity,
+          total: ci.item.price * ci.quantity,
+        })),
+      });
+    } catch {
+      // Local history is best-effort (server already has the order).
+    }
+    triggerConfetti();
+
+    const localBill: BillData = {
+      orderNumber,
+      customerName,
+      customerPhone,
+      items: items.map(ci => ({ name: ci.item.name, price: ci.item.price, quantity: ci.quantity })),
+      subtotal,
+      discount,
+      gst,
+      delivery: currentDelivery,
+      grandTotal: currentGrandTotal,
+      deliveryAddress,
+      remainingCoins,
+      coinsUsed: Math.round(coinDiscount),
+      paymentMethod: razorpayOrderId ? "razorpay" : "FOOD_FACTORY_COINS",
+    };
+
+    if (razorpayOrderId) {
+      try {
+        const details = await paymentsApi.getOrderDetails(razorpayOrderId);
+        if (details.paymentStatus === "paid") {
+          setBillData({
+            orderNumber: details.orderNumber,
+            customerName: details.customerName || customerName,
+            customerPhone: details.customerPhone || customerPhone || "",
+            items: details.items.map(it => ({ name: it.name, price: it.price, quantity: it.quantity })),
+            subtotal: details.subtotal,
+            discount: details.discount,
+            gst: details.gst,
+            delivery: details.delivery,
+            grandTotal: details.grandTotal,
+            deliveryAddress: details.deliveryAddress,
+            razorpayPaymentId: details.razorpayPaymentId,
+            whatsappInvoiceStatus: details.whatsappInvoiceStatus ?? null,
+          });
+          setShowBill(true);
+          resetAfterOrder();
+          return;
+        }
+      } catch (err) {
+        console.error("order-details fetch failed", err);
+      }
+    }
+
+    setBillData(localBill);
+    setShowBill(true);
+    resetAfterOrder();
+  }, [customerName, customerPhone, items, subtotal, discount, gst, grandTotal, deliveryAddress, resetAfterOrder]);
+
+  const rzp = useRazorpayCheckout(handleRzpPaid);
+  const rzpBusy = ["starting", "checkout-open", "verifying", "rechecking"].includes(rzp.phase);
+  const identityName = user?.name?.trim() || "";
+  const deliveryInfo = deliveryChargeForAddress(deliveryAddress);
+  const deliveryCharge = deliveryInfo.charge;
+  const [useCoinsEnabled, setUseCoinsEnabled] = useState(false);
+  const cartGrandTotal = grandTotal + deliveryCharge;
+  const coinsToRedeem = Math.round(coinDiscount);
+  const coinsCoverFood = useCoinsEnabled && coinDiscount > 0 && grandTotal === 0;
+  const orderFreeWithCoins = coinsCoverFood && deliveryCharge === 0;
+  const addressReady = isDeliveryAddressValid(deliveryAddress);
+  const payOnlineReady = !rzpBusy && !!customerName.trim() && !!normalizeIndianPhone(customerPhone) && items.length > 0 && addressReady;
+
+  // If a payment may have been interrupted (success + network loss / refresh),
+  // re-check with the server when the drawer reopens. Only done once per
+  // checkout session to avoid nagging after a deliberate cancel.
+  useEffect(() => {
+    if (open && rzp.hasPending && !recheckedOnOpenRef.current) {
+      recheckedOnOpenRef.current = true;
+      rzp.recheckPending();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const handlePayOnline = useCallback(async () => {
+    const cleanName = customerName.trim();
+    if (!cleanName) {
+      toast.error("Please enter your name.");
+      return;
+    }
+    const cleanPhone = normalizeIndianPhone(customerPhone);
+    if (!cleanPhone) {
+      toast.error("Please enter a valid 10-digit mobile number.");
+      return;
+    }
     if (items.length === 0) {
       toast.error("Cart is empty");
       return;
     }
-    setSaving(true);
-    try {
-      const orderResult = await saveOrderToAppwrite();
-      toast.success("Order saved!");
-      triggerConfetti();
-      
-      // Show in-app bill instead of popup
-      setBillData({
-        orderNumber: String(orderResult.order_number),
-        customerName,
-        customerPhone,
-        items,
-        subtotal,
-        discount,
-        gst,
-        grandTotal
-      });
-      setShowBill(true);
-      resetAfterOrder();
-      setSaving(false);
-    } catch (error: any) {
-      console.error("Print error:", error);
-      toast.error(error?.message || "Failed to save order");
-      setSaving(false);
+    if (!isDeliveryAddressValid(deliveryAddress)) {
+      toast.error("Please add a valid delivery address to continue.");
+      return;
     }
-  }, [saveOrderToAppwrite, resetAfterOrder, customerName, customerPhone, items, subtotal, discount, gst, grandTotal]);
+    let accessToken: string | undefined;
+    if (user) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        accessToken = data.session?.access_token ?? undefined;
+      } catch {
+        // Proceed as guest if the session token cannot be read.
+      }
+    }
+    recheckedOnOpenRef.current = false;
+    await rzp.startPayment({
+      items: items.map(ci => ({ productId: ci.item.id, quantity: ci.quantity })),
+      customerName: cleanName,
+      customerPhone: cleanPhone,
+      discount: discount || undefined,
+      accessToken,
+      deliveryAddress: deliveryAddress as DeliveryAddress,
+      useCoins: useCoinsEnabled,
+    });
+  }, [customerName, customerPhone, items, discount, rzp, user, deliveryAddress, useCoinsEnabled]);
 
   const closeBill = () => {
     setShowBill(false);
@@ -429,55 +519,6 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     onClose();
     navigate("/");
   };
-
-  const handleWhatsApp = useCallback(async () => {
-    if (!customerPhone.trim()) { 
-      toast.error("Please enter WhatsApp number"); 
-      return; 
-    }
-    if (items.length === 0) {
-      toast.error("Cart is empty");
-      return;
-    }
-    setSaving(true);
-    try {
-      const orderResult = await saveOrderToAppwrite();
-      const billText = formatBillText(String(orderResult.order_number), customerName, customerPhone, items, subtotal, discount, gst, grandTotal);
-      const phone = customerPhone.replace(/\D/g, "");
-      const fullPhone = phone.startsWith("91") ? phone : `91${phone}`;
-      window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(billText)}`, "_blank");
-      toast.success("Opening WhatsApp...");
-      triggerConfetti();
-      resetAfterOrder();
-      navigate("/");
-    } catch (error: any) {
-      console.error("WhatsApp error:", error);
-      toast.error(error?.message || "Failed to save order");
-    } finally {
-      setSaving(false);
-    }
-  }, [customerPhone, saveOrderToAppwrite, customerName, items, subtotal, discount, gst, grandTotal, resetAfterOrder, navigate]);
-
-  const handleQRPaid = useCallback(async () => {
-    if (items.length === 0) {
-      toast.error("Cart is empty");
-      return;
-    }
-    setSaving(true);
-    try {
-      await saveOrderToAppwrite();
-      toast.success("Payment confirmed! Order saved 🎉");
-      triggerConfetti();
-      resetAfterOrder();
-      onClose();
-      navigate("/");
-    } catch (error: any) {
-      console.error("QR payment error:", error);
-      toast.error(error?.message || "Failed to save order");
-    } finally {
-      setSaving(false);
-    }
-  }, [saveOrderToAppwrite, resetAfterOrder, onClose, navigate, items]);
 
   // Bill Modal
   if (showBill && billData) {
@@ -520,13 +561,26 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                 {billData.customerPhone && <p><strong>Phone:</strong> {billData.customerPhone}</p>}
               </div>
             )}
+
+            {/* Delivery Address */}
+            {billData.deliveryAddress && (
+              <div className="text-sm mb-3 pb-3 border-b">
+                <p className="font-semibold mb-0.5"><strong>Deliver to:</strong></p>
+                {formatAddressLines(billData.deliveryAddress).map((line, i) => (
+                  <p key={i} className="text-muted-foreground">
+                    {i === 0 ? <MapPin className="w-3 h-3 inline mr-1" /> : null}
+                    {line}
+                  </p>
+                ))}
+              </div>
+            )}
             
             {/* Items */}
             <div className="mb-3">
-              {billData.items.map((ci: any, idx: number) => (
+              {billData.items.map((ci, idx) => (
                 <div key={idx} className="flex justify-between py-1 text-sm">
-                  <span className="text-foreground">{ci.quantity}x {ci.item.name}</span>
-                  <span className="text-muted-foreground">₹{ci.item.price * ci.quantity}</span>
+                  <span className="text-foreground">{ci.quantity}x {ci.name}</span>
+                  <span className="text-muted-foreground">₹{ci.price * ci.quantity}</span>
                 </div>
               ))}
             </div>
@@ -543,16 +597,50 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                   <span>-₹{billData.discount}</span>
                 </div>
               )}
+              {billData.coinsUsed != null && billData.coinsUsed > 0 && (
+                <div className="flex justify-between text-sm text-green-500">
+                  <span>Food Factory Coins</span>
+                  <span>-₹{billData.coinsUsed}</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">GST (5%)</span>
                 <span>₹{billData.gst}</span>
               </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Delivery</span>
+                <span className={billData.delivery > 0 ? "" : "text-veg"}>{billData.delivery > 0 ? `₹${billData.delivery}` : "FREE"}</span>
+              </div>
+              {billData.paymentMethod === "FOOD_FACTORY_COINS" && billData.remainingCoins != null && (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Remaining Coins</span>
+                  <span>{billData.remainingCoins} coins</span>
+                </div>
+              )}
               <div className="flex justify-between font-bold text-lg pt-2 mt-2 border-t">
                 <span>Total</span>
                 <span className="text-orange-500">₹{billData.grandTotal}</span>
               </div>
             </div>
             
+{/* Payment */}
+            {(billData.razorpayPaymentId || billData.whatsappInvoiceStatus === "SENT" || billData.paymentMethod === "FOOD_FACTORY_COINS") && (
+              <div className="mt-3 pt-3 border-t text-xs text-muted-foreground space-y-0.5">
+                {billData.paymentMethod === "FOOD_FACTORY_COINS" && (
+                  <p>Paid with <span className="font-medium text-foreground">Food Factory Coins</span></p>
+                )}
+                {billData.razorpayPaymentId && (
+                  <p>Paid via <span className="font-medium text-foreground">Razorpay Online Payment</span></p>
+                )}
+                {billData.razorpayPaymentId && (
+                  <p>Razorpay ID: <span className="font-medium text-foreground">{billData.razorpayPaymentId}</span></p>
+                )}
+                {billData.whatsappInvoiceStatus === "SENT" && (
+                  <p className="font-medium text-veg">Invoice sent to your WhatsApp &#10003;</p>
+                )}
+</div>
+            )}
+
             {/* Footer */}
             <div className="text-center mt-4 pt-4 border-t-2 border-dashed border-orange-400 text-muted-foreground text-sm">
               <p>Thank you for your visit!</p>
@@ -599,8 +687,12 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
           <span>{dateStr} • {timeStr}</span>
         </div>
 
-        {/* Items list */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {/* Items list — Cart section */}
+        <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4 space-y-2">
+          {items.length > 0 && (
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Cart Items</p>
+          )}
+
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
               <ShoppingBag className="w-12 h-12 mb-3 opacity-30" />
@@ -638,34 +730,162 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
           )}
         </div>
 
-        <div ref={printRef} className="hidden" />
-
-        {/* Footer */}
+        {/* Footer — Checkout section */}
         {items.length > 0 && (
           <div className="border-t flex-shrink-0">
+            {/* Checkout section header */}
+            <div className="px-4 pt-3 pb-1 bg-surface-warm">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4 text-primary" />
+                Checkout
+              </h3>
+            </div>
+
             <div className="p-4 space-y-3">
-              {/* Customer Name (Optional) */}
+              {/* Customer Name (Required) */}
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input 
                   type="text" 
-                  placeholder="Customer Name (Optional)"
-                  value={customerName} 
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" 
+                  placeholder="Customer Name (Required)"
+                  value={identityName || customerName}
+                  onChange={(e) => { if (!identityName) setCustomerName(e.target.value); }}
+                  readOnly={!!identityName}
+                  title={identityName ? "Comes from your Food Factory account" : ""}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 read-only:opacity-90" 
                 />
               </div>
 
-              {/* WhatsApp Number (Required) */}
+              {/* Mobile Number (Required) */}
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input 
                   type="tel" 
-                  placeholder="WhatsApp Number (Required) *"
+                  inputMode="tel"
+                  placeholder="Mobile Number (Required) *"
                   value={customerPhone} 
                   onChange={(e) => setCustomerPhone(e.target.value)}
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" 
                 />
+              </div>
+
+              {/* Delivery Address (required before checkout) */}
+              <div className="rounded-xl border border-border/50 bg-secondary/40 p-3">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
+                    <p className="text-sm font-semibold text-foreground">Delivery Address</p>
+                  </div>
+                  {deliveryAddress && !editingAddress && (
+                    <button onClick={openAddressEditor} className="text-xs font-semibold text-primary flex-shrink-0">
+                      Change
+                    </button>
+                  )}
+                </div>
+
+                {editingAddress ? (
+                  <div className="space-y-2.5">
+                    <button
+                      onClick={getCurrentLocation}
+                      disabled={gettingLocation}
+                      className="w-full py-2.5 rounded-lg border-2 border-orange-500 bg-orange-50 dark:bg-orange-500/10 text-orange-600 font-medium text-xs flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                    >
+                      {gettingLocation ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Locate className="w-3.5 h-3.5" />
+                      )}
+                      {gettingLocation ? "Detecting Location..." : "Use Current Location"}
+                    </button>
+
+                    {addressForm.latitude != null && addressForm.longitude != null && (
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <Navigation className="w-3 h-3" />
+                        Coordinates: {addressForm.latitude.toFixed(6)}, {addressForm.longitude.toFixed(6)}
+                      </p>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] text-muted-foreground block mb-1">House/Flat No.</label>
+                        <input type="text" value={addressForm.houseNumber} placeholder="A-101"
+                          onChange={(e) => setAddressField("houseNumber", e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-muted-foreground block mb-1">Street</label>
+                        <input type="text" value={addressForm.street} placeholder="Main Road"
+                          onChange={(e) => setAddressField("street", e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-muted-foreground block mb-1">Area / Locality *</label>
+                      <input type="text" value={addressForm.area} placeholder="Near mall, market area"
+                        onChange={(e) => setAddressField("area", e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] text-muted-foreground block mb-1">City *</label>
+                        <input type="text" value={addressForm.city} placeholder="City"
+                          onChange={(e) => setAddressField("city", e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-muted-foreground block mb-1">State *</label>
+                        <input type="text" value={addressForm.state} placeholder="State"
+                          onChange={(e) => setAddressField("state", e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] text-muted-foreground block mb-1">PIN (6 digit) *</label>
+                        <input type="text" inputMode="numeric" value={addressForm.postalCode} placeholder="560001"
+                          onChange={(e) => setAddressField("postalCode", e.target.value.replace(/\D/g, "").slice(0, 6))}
+                          className="w-full px-3 py-2 rounded-lg bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-muted-foreground block mb-1">Country</label>
+                        <input type="text" value={addressForm.country} placeholder="India"
+                          onChange={(e) => setAddressField("country", e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={saveDeliveryAddress}
+                        className="flex-1 py-2.5 rounded-lg cart-gradient text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5" />
+                        Save Address
+                      </button>
+                      <button onClick={() => setEditingAddress(false)}
+                        className="px-4 py-2.5 rounded-lg bg-secondary text-foreground text-xs font-semibold">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : deliveryAddress ? (
+                  <div className="text-xs space-y-0.5">
+                    {formatAddressLines(deliveryAddress).map((line, i) => (
+                      <p key={i} className="text-muted-foreground">{line}</p>
+                    ))}
+                    <p className="mt-1 font-medium text-foreground">
+                      {deliveryCharge > 0 ? `Delivery ₹${deliveryCharge}` : "Free Delivery"}
+                      {deliveryInfo.distanceKm != null && ` • ${deliveryInfo.distanceKm.toFixed(1)} km from shop`}
+                    </p>
+                  </div>
+                ) : (
+                  <button onClick={openAddressEditor}
+                    className="w-full py-2.5 rounded-lg bg-secondary text-foreground text-xs font-semibold flex items-center justify-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-primary" />
+                    Add Delivery Address
+                  </button>
+                )}
               </div>
 
               {/* Discount */}
@@ -682,77 +902,93 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                 </button>
               </div>
 
+              {/* Food Factory Coins redemption */}
+              {user && (
+                <CoinRedemptionSection
+                  subtotal={subtotal}
+                  enabled={useCoinsEnabled}
+                  onEnabledChange={setUseCoinsEnabled}
+                  onDiscountChange={setCoinDiscount}
+                />
+              )}
+
               {/* Totals */}
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between text-foreground"><span>Subtotal</span><span>₹{subtotal}</span></div>
                 {discount > 0 && <div className="flex justify-between text-veg"><span>Discount</span><span>-₹{discount}</span></div>}
+                {useCoinsEnabled && coinDiscount > 0 && (
+                  <div className="flex justify-between text-orange-600 dark:text-orange-400">
+                    <span>{coinsToRedeem} Coins</span>
+                    <span>-₹{coinDiscount}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-foreground"><span>GST (5%)</span><span>₹{gst}</span></div>
+                <div className="flex justify-between text-foreground">
+                  <span>Delivery</span>
+                  <span className={deliveryCharge > 0 ? "" : "text-veg"}>
+                    {deliveryCharge > 0 ? `₹${deliveryCharge}` : items.length > 0 ? "FREE" : "₹0"}
+                  </span>
+                </div>
                 <div className="flex justify-between font-bold pt-1.5 border-t text-foreground">
-                  <span>Grand Total</span><span>₹{grandTotal}</span>
+                  <span>Grand Total</span><span>₹{orderFreeWithCoins ? 0 : cartGrandTotal}</span>
                 </div>
               </div>
 
-              {/* Clear + Print */}
-              <div className="flex gap-2 pt-1">
-                {!showClearConfirm ? (
-                  <button onClick={() => setShowClearConfirm(true)}
-                    className="flex-1 py-3 rounded-xl bg-destructive/10 text-destructive text-sm font-semibold">
-                    Clear
-                  </button>
-                ) : (
-                  <div className="flex-1 flex gap-2">
-                    <button onClick={handleClear}
-                      className="flex-1 py-3 rounded-xl bg-destructive text-white text-sm font-semibold">Confirm</button>
-                    <button onClick={() => setShowClearConfirm(false)}
-                      className="flex-1 py-3 rounded-xl bg-secondary text-sm font-semibold">Cancel</button>
-                  </div>
+              {orderFreeWithCoins && (
+                <p className="text-xs text-center text-veg bg-veg/10 rounded-lg px-2 py-1.5">
+                  🪙 Your Food Factory Coins cover this order — you pay ₹0.
+                </p>
+              )}
+
+              {coinsCoverFood && deliveryCharge > 0 && (
+                <p className="text-xs text-center text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-lg px-2 py-1.5">
+                  🪙 Coins cover your food. Pay only ₹{deliveryCharge} delivery online.
+                </p>
+              )}
+
+              {/* Pay Online (Razorpay / Coins) */}
+              <div className="space-y-1.5">
+                <button onClick={handlePayOnline} disabled={!payOnlineReady}
+                  className="w-full py-3 rounded-xl cart-gradient text-primary-foreground text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/10 disabled:opacity-60 disabled:cursor-not-allowed transition-transform active:scale-[0.98]">
+                  {rzpBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : orderFreeWithCoins ? <Coins className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />}
+                  {orderFreeWithCoins ? `Place Order with ${coinsToRedeem} Coins` : "Pay Online"}
+                </button>
+
+                {rzpBusy && (
+                  <p className="text-xs text-center text-muted-foreground" role="status">
+                    <Loader2 className="w-3 h-3 inline animate-spin mr-1" />
+                    Processing payment...
+                  </p>
                 )}
-                <button onClick={handlePrint} disabled={saving}
-                  className="flex-1 py-3 rounded-xl cart-gradient text-primary-foreground text-sm font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-                  Print
-                </button>
-              </div>
-
-              {/* WhatsApp + Scan & Pay */}
-              <div className="flex gap-2">
-                <button onClick={handleWhatsApp} disabled={saving || !customerPhone.trim()}
-                  className="flex-1 py-3 rounded-xl bg-veg text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
-                  <Send className="w-4 h-4" /> WhatsApp
-                </button>
-
-                <ExpandableScreen>
-                  <ExpandableScreenTrigger
-                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    <QrCode className="w-4 h-4" />
-                    Scan & Pay
-                  </ExpandableScreenTrigger>
-
-                  <ExpandableScreenContent>
-                    <div className="flex flex-col h-full p-6">
-                      <div className="flex justify-center">
-                        <div className="p-4 bg-white rounded-xl shadow-inner">
-                          <PaymentQR grandTotal={grandTotal} orderNumber="PENDING"/>
-                        </div>
-                      </div>
-
-                      <div className="mt-auto">
-                        <button
-                          onClick={handleQRPaid}
-                          disabled={saving}
-                          className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold text-sm shadow-lg transition active:scale-95 disabled:opacity-50"
-                        >
-                          {saving ? (
-                            <Loader2 className="w-4 h-4 animate-spin mx-auto" />
-                          ) : (
-                            "Payment Done"
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </ExpandableScreenContent>
-                </ExpandableScreen>
+                {!rzpBusy && !payOnlineReady && (
+                  <p className="text-xs text-center text-muted-foreground">
+                    {!customerName.trim()
+                      ? "Your name is required to continue."
+                      : !normalizeIndianPhone(customerPhone)
+                        ? "Enter a valid 10-digit mobile number to continue."
+                        : !addressReady
+                          ? "Add a valid delivery address to continue (house/street, area, city, state, PIN)."
+                          : "Add at least one item to the cart."}
+                  </p>
+                )}
+                {rzp.phase === "cancelled" && (
+                  <p className="text-xs text-center text-amber-500" role="status">Payment cancelled. Your cart is still saved.</p>
+                )}
+                {rzp.phase === "failed" && (
+                  <p className="text-xs text-center text-destructive" role="alert">
+                    {rzp.errorMessage || "Payment failed. Please try again."}
+                  </p>
+                )}
+                {rzp.phase === "error" && (
+                  <p className="text-xs text-center text-muted-foreground" role="alert">{rzp.errorMessage}</p>
+                )}
+                {(rzp.phase === "failed" || rzp.phase === "error") && (
+                  <button onClick={handlePayOnline}
+                    className="w-full py-2.5 rounded-xl bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-2">
+                    <ShieldCheck className="w-4 h-4" />
+                    Try Payment Again
+                  </button>
+                )}
               </div>
             </div>
           </div>

@@ -1,5 +1,40 @@
 export type FoodType = "veg" | "egg" | "nonveg";
 
+export type SpiceLevel = "mild" | "medium" | "spicy";
+
+export interface NutritionInfo {
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  servingLabel?: string;
+}
+
+/**
+ * Optional rich product attributes rendered on the Product Detail Page.
+ * Everything is optional — the PDP gracefully hides sections without data.
+ * Stored in the `details` JSONB column of the products table.
+ */
+export interface ProductDetails {
+  shortDescription?: string;
+  compareAtPrice?: number;
+  images?: string[];
+  ingredients?: string[];
+  nutrition?: NutritionInfo;
+  spiceLevel?: SpiceLevel;
+  prepTimeMinutes?: number;
+  isVegan?: boolean;
+  isJainFriendly?: boolean;
+  containsDairy?: boolean;
+  containsGluten?: boolean;
+  containsNuts?: boolean;
+  isInHouseMade?: boolean;
+  isBestseller?: boolean;
+  /** Only set when real review data exists — never fabricated. */
+  rating?: number;
+  reviewCount?: number;
+}
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -9,6 +44,7 @@ export interface MenuItem {
   foodType: FoodType;
   image: string;
   available: boolean;
+  details?: ProductDetails;
 }
 
 export const categories = [
@@ -69,8 +105,24 @@ export const menuItems: MenuItem[] = [
   { id: "cc4", name: "Nutella Coffee", description: "Nutella cold coffee", category: "Cold Coffee", price: 80, foodType: "veg", image: unsplashImg("1592663527359-cf6642f54cff", 24), available: true },
 
   // Burgers
-  { id: "bg1", name: "Veg Burger", description: "Veg patty burger", category: "Burgers", price: 60, foodType: "veg", image: unsplashImg("1550547660-d9450f859349", 25), available: true },
-  { id: "bg2", name: "Veg Cheese Burger", description: "Veg burger with cheese", category: "Burgers", price: 70, foodType: "veg", image: unsplashImg("1568901839119-631418a3910d", 26), available: true },
+  { id: "bg1", name: "Veg Burger", description: "Veg patty burger", category: "Burgers", price: 60, foodType: "veg", image: unsplashImg("1550547660-d9450f859349", 25), available: true,
+    details: {
+      shortDescription: "Crispy house-made veg patty with fresh veggies and creamy sauce in a soft bun.",
+      ingredients: ["House-made veg patty", "Fresh lettuce", "Tomato", "Onion", "Signature sauce", "In-house baked bun"],
+      containsGluten: true,
+      isInHouseMade: true,
+      prepTimeMinutes: 10,
+    } },
+  { id: "bg2", name: "Veg Cheese Burger", description: "Veg burger with cheese", category: "Burgers", price: 70, foodType: "veg", image: unsplashImg("1568901839119-631418a3910d", 26), available: true,
+    details: {
+      shortDescription: "Loaded with melted cheese over our house-made veg patty and crisp vegetables.",
+      ingredients: ["House-made veg patty", "Cheese slice", "Fresh lettuce", "Tomato", "Onion", "Signature sauce", "In-house baked bun"],
+      containsDairy: true,
+      containsGluten: true,
+      isInHouseMade: true,
+      isBestseller: true,
+      prepTimeMinutes: 10,
+    } },
   { id: "bg3", name: "Chicken Burger", description: "Chicken patty burger", category: "Burgers", price: 80, foodType: "nonveg", image: unsplashImg("1586190848861-99aa4a171e90", 27), available: true },
   { id: "bg4", name: "Chicken Cheese Burger", description: "Chicken burger with cheese", category: "Burgers", price: 90, foodType: "nonveg", image: unsplashImg("1553979459-d2229ba7433b", 28), available: true },
   { id: "bg5", name: "Egg Burger", description: "Egg patty burger", category: "Burgers", price: 60, foodType: "egg", image: unsplashImg("1571091718767-18b5b1457add", 29), available: true },

@@ -17,6 +17,8 @@ interface CartContextType {
   gst: number;
   discount: number;
   setDiscount: (d: number) => void;
+  coinDiscount: number;
+  setCoinDiscount: (d: number) => void;
   grandTotal: number;
   showCelebration: boolean;
   triggerCelebration: () => void;
@@ -42,6 +44,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } catch { return []; }
   });
   const [discount, setDiscount] = useState(0);
+  const [coinDiscount, setCoinDiscount] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationKey, setCelebrationKey] = useState(0);
 
@@ -85,18 +88,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clearCart = useCallback(() => {
     setItems([]);
     setDiscount(0);
+    setCoinDiscount(0);
   }, []);
 
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
   const subtotal = items.reduce((s, i) => s + i.item.price * i.quantity, 0);
   const validDiscount = Math.min(discount, subtotal);
-  const gst = Math.round((subtotal - validDiscount) * 0.05);
-  const grandTotal = subtotal - validDiscount + gst;
+  const validCoinDiscount = Math.min(coinDiscount, Math.max(0, subtotal - validDiscount));
+  const taxableAmount = Math.max(0, subtotal - validDiscount - validCoinDiscount);
+  const gst = Math.round(taxableAmount * 0.05);
+  const grandTotal = taxableAmount + gst;
 
   return (
     <CartContext.Provider value={{
       items, addItem, removeItem, updateQuantity, clearCart,
       totalItems, subtotal, gst, discount: validDiscount, setDiscount,
+      coinDiscount: validCoinDiscount, setCoinDiscount,
       grandTotal, showCelebration, triggerCelebration
     }}>
       {children}

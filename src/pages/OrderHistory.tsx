@@ -1,222 +1,241 @@
-import { useEffect, useState, useCallback } from "react";
+// ============================================================================
+// OrderHistory — customer-facing "My Orders" page. Shows ACTIVE ORDERS
+// (pending, preparing, ready) prominently at the top with live tracking,
+// and PAST ORDERS (completed, cancelled) below with expandable details.
+// Uses React Query + Supabase Realtime for live status updates.
+// ============================================================================
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { supabase, SUPABASE_CONFIG } from "@/lib/supabaseClient";
-import { ArrowLeft, Clock, ReceiptIndianRupee, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, ReceiptIndianRupee, RefreshCw } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { MobileNav } from "@/components/pos/MobileNav";
 import { CartDrawer } from "@/components/pos/CartDrawer";
-
-interface OrderItem {
-  product_name: string;
-  product_price: number;
-  quantity: number;
-  total: number;
-}
-
-interface Order {
-  id: string;
-  order_number: string;
-  customer_phone: string | null;
-  subtotal: number;
-  discount: number;
-  gst: number;
-  grand_total: number;
-  status: string;
-  created_at: string;
-  items: OrderItem[];
-}
-
-function OrderSkeleton() {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="h-[72px] skeleton-shimmer rounded-xl" />
-      ))}
-    </div>
-  );
-}
+import { ActiveOrderCard } from "@/components/order/ActiveOrderCard";
+import { PastOrderCard } from "@/components/order/PastOrderCard";
+import { OrderCardSkeleton } from "@/components/order/OrderCardSkeleton";
+import { LiveIndicator } from "@/components/order/OrderStatusBadge";
+import { useCustomerOrders, useInvalidateOrders } from "@/hooks/useOrders";
+import { isOrderActive, isOrderTerminal } from "@/lib/orderStatus";
+import { toast } from "sonner";
+import { motion } from "framer-motion";
+import type { OrderData } from "@/hooks/useOrders";
 
 export default function OrderHistory() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [orders, setOrders] = useState<Order[]>(() => {
-    // Optimistic: load from localStorage immediately while fetching from server
-    try {
-      const stored = localStorage.getItem("ff_orders");
-      return stored ? JSON.parse(stored) : [];
-    } catch { return []; }
-  });
-  const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const invalidateOrders = useInvalidateOrders();
   const [cartOpen, setCartOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [previousStatuses, setPreviousStatuses] = useState<Record<string, string>>({});
 
-  const fetchOrders = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    try {
-      // Fetch orders
-      const { data: ordersData, error } = await supabase
-        .from("orders")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100);
-      
-      if (error) throw error;
+  const {
+    data: orders = [],
+    isLoading,
+    error,
+    refetch,
+    isRefetching,
+  } = useCustomerOrders();
 
-      // Fetch order items for all orders
-      const orderIds = (ordersData || []).map(o => o.id);
-      const itemsMap: Record<string, OrderItem[]> = {};
-      
-      if (orderIds.length > 0) {
-        const { data: itemsData } = await supabase
-          .from("order_items")
-          .select("*")
-          .in("order_id", orderIds);
+  // Track status transitions for toast notifications
+  useEffect(() => {
+    if (!orders.length) return;
 
-        if (itemsData) {
-          itemsData.forEach((item: any) => {
-            if (!itemsMap[item.order_id]) {
-              itemsMap[item.order_id] = [];
-            }
-            itemsMap[item.order_id].push({
-              product_name: item.product_name,
-              product_price: item.product_price,
-              quantity: item.quantity,
-              total: item.total,
-            });
-          });
+    orders.forEach((order: OrderData) => {
+      const prevStatus = previousStatuses[order.id];
+      if (prevStatus && prevStatus !== order.status) {
+        const messages: Record<string, string> = {
+          preparing: "Your Food Factory order is now being prepared.",
+          ready: "Great news! Your Food Factory order is ready for delivery.",
+          completed: "Your Food Factory order is completed. You earned +10 Coins! 🪙",
+          cancelled: "Your Food Factory order has been cancelled.",
+        };
+        const msg = messages[order.status];
+        if (msg) {
+          if (order.status === "completed" || order.status === "cancelled") {
+            toast.success(msg);
+          } else {
+            toast.info(msg);
+          }
         }
       }
+    });
 
-      // Merge items into orders
-      const fetched = (ordersData || []).map((order: any) => ({
-        ...order,
-        items: itemsMap[order.id] || [],
-        grand_total: order.grand_total || 0,
-        subtotal: order.subtotal || 0,
-        gst: order.gst || 0,
-        discount: order.discount || 0,
-      })) as Order[];
-      
-      setOrders(fetched);
-      localStorage.setItem("ff_orders", JSON.stringify(fetched.slice(0, 100)));
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+    // Update previous statuses
+    const newStatuses: Record<string, string> = {};
+    orders.forEach((order: OrderData) => {
+      newStatuses[order.id] = order.status;
+    });
+    setPreviousStatuses(newStatuses);
+  }, [orders]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Redirect to login if not authenticated
   useEffect(() => {
-    if (!user) {
+    if (!authLoading && !user) {
       navigate("/login");
-      return;
     }
-    fetchOrders();
-  }, [user, fetchOrders, navigate]);
+  }, [user, authLoading, navigate]);
 
-  const toggleExpand = useCallback((id: string) => {
-    setExpandedId(prev => prev === id ? null : id);
-  }, []);
+  // Clear cache on unmount (logout protection)
+  useEffect(() => {
+    return () => {
+      invalidateOrders();
+    };
+  }, [invalidateOrders]);
 
-  if (!user) return null;
+  const { activeOrders, pastOrders } = useMemo(() => {
+    const active: OrderData[] = [];
+    const past: OrderData[] = [];
+    orders.forEach((order: OrderData) => {
+      if (isOrderActive(order.status) || order.status === "cancelled") {
+        // cancelled orders that were recently active show at top briefly
+        if (order.status === "cancelled") {
+          // Check if it was cancelled recently (within last 5 min)
+          const cancelledAt = order.cancelled_at
+            ? new Date(order.cancelled_at).getTime()
+            : 0;
+          const fiveMinAgo = Date.now() - 5 * 60 * 1000;
+          if (cancelledAt > fiveMinAgo) {
+            active.push(order);
+          } else {
+            past.push(order);
+          }
+        } else {
+          active.push(order);
+        }
+      } else {
+        past.push(order);
+      }
+    });
+    return { activeOrders: active, pastOrders: past };
+  }, [orders]);
+
+  if (authLoading || !user) return null;
+
+  const hasActiveOrders = activeOrders.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-40 glass-surface border-b border-border/50">
         <div className="container mx-auto px-4 py-3 flex items-center gap-3">
-          <Link to="/" className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/70 transition-colors">
+          <Link
+            to="/"
+            className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/70 transition-colors"
+          >
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-foreground">Order History</h1>
-              {/* Pulsing Live Dot */}
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
-              </span>
+              <h1 className="text-lg font-bold text-foreground">My Orders</h1>
+              {hasActiveOrders && <LiveIndicator />}
             </div>
-            <p className="text-xs text-muted-foreground">{loading ? "Loading..." : `${orders.length} orders`}</p>
+            <p className="text-xs text-muted-foreground">
+              {isLoading
+                ? "Loading..."
+                : orders.length === 0
+                  ? "No orders yet"
+                  : `${orders.length} ${orders.length === 1 ? "order" : "orders"}`}
+            </p>
           </div>
           <button
-            onClick={() => fetchOrders(true)}
-            disabled={refreshing}
+            onClick={() => refetch()}
+            disabled={isRefetching}
             className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/70 transition-colors disabled:opacity-50"
+            aria-label="Refresh orders"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`w-4 h-4 ${isRefetching ? "animate-spin" : ""}`}
+            />
           </button>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-4 space-y-3 pb-40">
-        {loading && orders.length === 0 ? (
-          <OrderSkeleton />
+      <main className="container mx-auto px-4 py-4 pb-40">
+        {/* Loading state */}
+        {isLoading && orders.length === 0 ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <OrderCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : error ? (
+          /* Error state */
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center justify-center py-16 text-center"
+          >
+            <div className="w-14 h-14 rounded-full bg-red-50 dark:bg-red-950/30 flex items-center justify-center mb-4">
+              <ReceiptIndianRupee className="w-7 h-7 text-red-400" />
+            </div>
+            <p className="font-medium text-foreground mb-1">
+              Unable to load your orders
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              Please check your connection and try again.
+            </p>
+            <button
+              onClick={() => refetch()}
+              className="px-5 py-2.5 rounded-xl cart-gradient text-primary-foreground text-sm font-semibold"
+            >
+              Try Again
+            </button>
+          </motion.div>
         ) : orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-            <ReceiptIndianRupee className="w-12 h-12 mb-3 opacity-30" />
-            <p className="font-medium">No orders yet</p>
-            <Link to="/" className="mt-3 px-5 py-2 rounded-xl cart-gradient text-primary-foreground text-sm font-semibold">
+          /* Empty state */
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center justify-center py-16 text-center"
+          >
+            <div className="w-16 h-16 rounded-full bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center mb-4">
+              <ReceiptIndianRupee className="w-8 h-8 text-orange-400" />
+            </div>
+            <p className="text-lg font-bold text-foreground mb-1">No Orders Yet</p>
+            <p className="text-sm text-muted-foreground mb-5">
+              Your next delicious order is waiting.
+            </p>
+            <Link
+              to="/"
+              className="px-6 py-2.5 rounded-xl cart-gradient text-primary-foreground text-sm font-semibold shadow-lg"
+            >
               Start Ordering
             </Link>
-          </div>
+          </motion.div>
         ) : (
-          orders.map((order) => {
-            const isExpanded = expandedId === order.id;
-            return (
-              <div key={order.id} className="glass-card rounded-xl overflow-hidden">
-                <button
-                  onClick={() => toggleExpand(order.id)}
-                  className="w-full p-4 flex items-center justify-between text-left active:bg-secondary/30 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl cart-gradient flex items-center justify-center text-primary-foreground flex-shrink-0">
-                      <ReceiptIndianRupee className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-sm text-foreground">{order.order_number}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {new Date(order.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                        {" • "}
-                        {new Date(order.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-base font-bold text-foreground">₹{order.grand_total}</span>
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                  </div>
-                </button>
+          <div className="space-y-6">
+            {/* Active Orders */}
+            {activeOrders.length > 0 && (
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    Active Orders
+                  </h2>
+                  <span className="w-5 h-5 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {activeOrders.length}
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {activeOrders.map((order, i) => (
+                    <ActiveOrderCard key={order.id} order={order} index={i} />
+                  ))}
+                </div>
+              </section>
+            )}
 
-                {isExpanded && (
-                  <div className="px-4 pb-4 space-y-2 border-t border-border/50">
-                    <div className="pt-3 space-y-1.5">
-                      {Array.isArray(order.items) && order.items.map((item: OrderItem, i: number) => (
-                        <div key={i} className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{item.quantity}x {item.product_name}</span>
-                          <span className="font-medium text-foreground">₹{item.total}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="border-t border-border/50 pt-2 space-y-1 text-sm">
-                      <div className="flex justify-between text-foreground"><span>Subtotal</span><span>₹{order.subtotal}</span></div>
-                      {order.discount > 0 && <div className="flex justify-between text-veg"><span>Discount</span><span>-₹{order.discount}</span></div>}
-                      <div className="flex justify-between text-foreground"><span>GST (5%)</span><span>₹{order.gst}</span></div>
-                      <div className="flex justify-between font-bold text-foreground pt-1 border-t border-border/50">
-                        <span>Grand Total</span><span>₹{order.grand_total}</span>
-                      </div>
-                      {order.customer_phone && (
-                        <p className="text-xs text-muted-foreground mt-1">📱 {order.customer_phone}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })
+            {/* Past Orders */}
+            {pastOrders.length > 0 && (
+              <section>
+                <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+                  Past Orders
+                </h2>
+                <div className="space-y-2">
+                  {pastOrders.map((order, i) => (
+                    <PastOrderCard key={order.id} order={order} index={i} />
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
         )}
       </main>
 
