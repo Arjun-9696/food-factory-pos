@@ -19,11 +19,14 @@ import {
   Check,
   X,
   Locate,
-  Navigation
+  Navigation,
+  Coins,
+  ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 import { MobileNav } from "@/components/pos/MobileNav";
 import { CartDrawer } from "@/components/pos/CartDrawer";
+import { useCoinWallet } from "@/hooks/useCoins";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
 
@@ -63,6 +66,7 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>("personal");
+  const { data: coinWallet } = useCoinWallet();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -391,6 +395,32 @@ export default function Profile() {
                   </p>
                 </div>
               </div>
+            </motion.div>
+
+            {/* Food Factory Coins card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+            >
+              <Link
+                to="/account/coins"
+                className={`flex items-center gap-4 p-4 rounded-2xl border ${borderColor} ${cardBg} backdrop-blur-lg hover:border-orange-400/60 transition-colors`}
+                aria-label={`Food Factory Coins balance: ${coinWallet?.balance ?? 0}`}
+              >
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center flex-shrink-0">
+                  <Coins className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`font-bold ${textPrimary} flex items-center gap-1.5`}>
+                    {coinWallet?.balance ?? 0} Food Factory Coins
+                  </p>
+                  <p className={`text-xs ${textSecondary}`}>
+                    Worth ₹{coinWallet?.rupeeValue ?? 0} • View wallet & history
+                  </p>
+                </div>
+                <ChevronRight className={`w-5 h-5 ${textSecondary} flex-shrink-0`} />
+              </Link>
             </motion.div>
 
             {/* Personal Details Section */}

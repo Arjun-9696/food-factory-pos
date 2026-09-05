@@ -70,20 +70,18 @@ export async function setupAppwrite(): Promise<boolean> {
 
         // Create collections
         for (const coll of COLLECTIONS) {
-            try {
-                await fetch(`${ENDPOINT}/databases/${DATABASE_ID}/collections`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Appwrite-Project': PROJECT_ID,
-                    },
-                    body: JSON.stringify({ 
-                        name: coll.name,
-                        documentSecurity: false,
-                        enabled: true 
-                    })
-                }).catch(() => {});
-            } catch {}
+            await fetch(`${ENDPOINT}/databases/${DATABASE_ID}/collections`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Appwrite-Project': PROJECT_ID,
+                },
+                body: JSON.stringify({ 
+                    name: coll.name,
+                    documentSecurity: false,
+                    enabled: true 
+                })
+            }).catch(() => {});
         }
 
         return true;

@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, LogIn, UserPlus} from "lucide-react";
 import { toast } from "sonner";
 import { MagicCard } from "@/components/magicui/magic-card";
-import { useTheme } from "next-themes";
 import confetti from "canvas-confetti";
 import { MobileNav } from "@/components/pos/MobileNav";
 import { CartDrawer } from "@/components/pos/CartDrawer";
@@ -57,7 +56,6 @@ const triggerConfetti = () => {
 export default function Login() {
   const { signIn, signUp, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
-  const { theme } = useTheme();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -125,7 +123,6 @@ export default function Login() {
         <MagicCard 
           className="w-full max-w-sm transition-transform duration-300 ease-out group-hover:rotate-x-2" 
           style={{ transformStyle: "preserve-3d" }}
-          gradientColor={theme === "dark" ? "#262626" : "#D9D9D955"}
         >
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-orange-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
           

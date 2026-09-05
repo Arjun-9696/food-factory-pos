@@ -70,7 +70,7 @@ export default function SalesReport() {
           .in("order_id", orderIds);
 
         if (itemsData) {
-          itemsData.forEach((item: any) => {
+          itemsData.forEach((item: { order_id: string; product_name: string; product_price: number; quantity: number; total: number }) => {
             if (!itemsMap[item.order_id]) {
               itemsMap[item.order_id] = [];
             }
@@ -85,7 +85,7 @@ export default function SalesReport() {
       }
 
       // Merge items into orders
-      const ordersList = (ordersData || []).map((doc: any) => ({
+      const ordersList = (ordersData || []).map((doc: { id: string; grand_total?: number; subtotal?: number; gst?: number; discount?: number; [key: string]: unknown }) => ({
         ...doc,
         items: itemsMap[doc.id] || [],
         grand_total: doc.grand_total || 0,

@@ -6,14 +6,18 @@ import { Link } from "react-router-dom";
 import { supabase, SUPABASE_CONFIG } from "@/lib/supabaseClient";
 import { 
   ArrowLeft, RefreshCw, Search, Clock, CheckCircle, XCircle, ChefHat, 
-  UtensilsCrossed, Phone, User, ChevronDown, ChevronUp, Bell
+  UtensilsCrossed, Phone, User, MapPin, ChevronDown, ChevronUp, Bell
 } from "lucide-react";
 import { toast } from "sonner";
 import { MobileNav } from "@/components/pos/MobileNav";
 import { CartDrawer } from "@/components/pos/CartDrawer";
 import { useTheme } from "next-themes";
-
-type OrderStatus = "pending" | "preparing" | "ready" | "completed" | "cancelled";
+import { formatAddressLines } from "@/lib/address";
+import type { DeliveryAddress } from "@/types/address";
+import type { OrderStatus } from "@/lib/orderStatus";
+import { ORDER_STATUS_PROGRESS as STATUS_PROGRESS } from "@/lib/orderStatus";
+import { AdminOrderTimeline } from "@/components/order/AdminOrderTimeline";
+import { recordOrderTimestamp, mergeOrderTimestamps } from "@/lib/orderTimestamps";
 
 interface OrderItem {
   product_name: string;
@@ -29,11 +33,52 @@ interface Order {
   customer_phone: string | null;
   subtotal: number;
   discount: number;
+  coin_discount: number;
   gst: number;
+  delivery: number;
   grand_total: number;
   status: OrderStatus;
+  payment_method: string | null;
   created_at: string;
+  updated_at: string;
+  pending_at: string | null;
+  preparing_at: string | null;
+  ready_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
   items: OrderItem[];
+  delivery_address: DeliveryAddress | null;
+}
+
+interface RawOrderRow {
+  id: string;
+  order_number: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  created_at: string;
+  updated_at: string;
+  status: string;
+  subtotal?: number;
+  discount?: number;
+  coin_discount?: number;
+  payment_method?: string | null;
+  gst?: number;
+  delivery?: number;
+  grand_total?: number;
+  delivery_address?: DeliveryAddress | null;
+  pending_at?: string | null;
+  preparing_at?: string | null;
+  ready_at?: string | null;
+  completed_at?: string | null;
+  cancelled_at?: string | null;
+}
+
+interface RawOrderItem {
+  order_id: string;
+  product_name: string;
+  product_price: number;
+  quantity: number;
+  total: number;
 }
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bgColor: string; icon: React.ElementType; next: OrderStatus | null }> = {
@@ -73,8 +118,6 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bgColor
     next: null
   },
 };
-
-const STATUS_PROGRESS: OrderStatus[] = ["pending", "preparing", "ready", "completed"];
 
 function OrderSkeleton() {
   return (
@@ -116,7 +159,7 @@ export default function Orders() {
           .in("order_id", orderIds);
 
         if (itemsData) {
-          itemsData.forEach((item: any) => {
+          itemsData.forEach((item: RawOrderItem) => {
             if (!itemsMap[item.order_id]) {
               itemsMap[item.order_id] = [];
             }
@@ -131,14 +174,26 @@ export default function Orders() {
       }
 
       // Merge items into orders
-      const fetched = (ordersData || []).map((order: any) => ({
-        ...order,
-        items: itemsMap[order.id] || [],
-        grand_total: order.grand_total || 0,
-        subtotal: order.subtotal || 0,
-        gst: order.gst || 0,
-        discount: order.discount || 0,
-      })) as Order[];
+      const fetched = (ordersData || []).map((order: RawOrderRow) => {
+        const withItems = {
+          ...order,
+          items: itemsMap[order.id] || [],
+          grand_total: order.grand_total || 0,
+          subtotal: order.subtotal || 0,
+          gst: order.gst || 0,
+          discount: order.discount || 0,
+          coin_discount: order.coin_discount || 0,
+          delivery: order.delivery || 0,
+          delivery_address: order.delivery_address || null,
+          updated_at: order.updated_at || order.created_at,
+          pending_at: order.pending_at || null,
+          preparing_at: order.preparing_at || null,
+          ready_at: order.ready_at || null,
+          completed_at: order.completed_at || null,
+          cancelled_at: order.cancelled_at || null,
+        };
+        return mergeOrderTimestamps(withItems as Order);
+      });
       
       setOrders(fetched);
     } catch (error) {
@@ -159,15 +214,40 @@ export default function Orders() {
 
   const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
     try {
-      const { error } = await supabase
-        .from("orders")
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq("id", orderId);
-      
-      if (error) throw error;
-      
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      const now = new Date().toISOString();
+      const timestampField = `${newStatus}_at` as
+        | "pending_at"
+        | "preparing_at"
+        | "ready_at"
+        | "completed_at"
+        | "cancelled_at";
+
+      // Get the session access token for the server-side update
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
+      // Call the server-side order-complete endpoint which handles coin awarding
+      const response = await fetch("/api/order-complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, status: newStatus, accessToken }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to update order status");
+      }
+
+      // Record the timestamp (localStorage is a reliable fallback)
+      recordOrderTimestamp(orderId, timestampField, now);
+
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus, [timestampField]: now } : o));
       toast.success(`Order marked as ${STATUS_CONFIG[newStatus].label}`);
+
+      // Show coin info if coins were earned
+      if (result.coins && result.coins.coinsEarned > 0) {
+        toast.info(`+${result.coins.coinsEarned} Food Factory Coins earned`);
+      }
     } catch (error) {
       console.error("Error updating order:", error);
       toast.error("Failed to update order status");
@@ -370,6 +450,17 @@ export default function Orders() {
                   
                   {isExpanded && (
                     <div className={`px-4 pb-4 pt-0 border-t ${isDark ? "border-gray-800" : "border-gray-200"}`}>
+                      {/* Order Timeline */}
+                      <AdminOrderTimeline
+                        status={order.status}
+                        createdAt={order.created_at}
+                        pendingAt={order.pending_at}
+                        preparingAt={order.preparing_at}
+                        readyAt={order.ready_at}
+                        completedAt={order.completed_at}
+                        cancelledAt={order.cancelled_at}
+                      />
+
                       <div className="mt-3 space-y-2">
                         {order.items && order.items.length > 0 ? (
                           order.items.map((item, idx) => (
@@ -396,15 +487,52 @@ export default function Orders() {
                             <span>-₹{order.discount}</span>
                           </div>
                         )}
+                        {order.coin_discount > 0 && (
+                          <div className="flex justify-between text-sm text-green-600">
+                            <span>{Math.round(order.coin_discount)} Coins</span>
+                            <span>-₹{order.coin_discount}</span>
+                          </div>
+                        )}
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">GST (5%)</span>
                           <span className="text-foreground">₹{order.gst}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Delivery</span>
+                          <span className={order.delivery > 0 ? "text-foreground" : "text-green-600"}>
+                            {order.delivery > 0 ? `₹${order.delivery}` : "FREE"}
+                          </span>
                         </div>
                         <div className="flex justify-between font-bold text-foreground pt-2 border-t border-dashed">
                           <span>Total</span>
                           <span className="text-orange-500">₹{order.grand_total}</span>
                         </div>
+                        {order.payment_method && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Payment</span>
+                            <span className="text-foreground">
+                              {order.payment_method === "razorpay"
+                                ? "Paid Online"
+                                : order.payment_method === "FOOD_FACTORY_COINS"
+                                  ? "Food Factory Coins"
+                                  : order.payment_method}
+                            </span>
+                          </div>
+                        )}
                       </div>
+
+                      {/* Delivery Address Snapshot */}
+                      {order.delivery_address && (
+                        <div className="mt-3 pt-3 border-t border-dashed flex items-start gap-1.5">
+                          <MapPin className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                          <div className="text-sm">
+                            <p className="text-xs font-semibold text-muted-foreground mb-0.5 uppercase tracking-wide">Deliver to</p>
+                            {formatAddressLines(order.delivery_address).map((line, i) => (
+                              <p key={i} className="text-foreground">{line}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Action Buttons */}
                       <div className="mt-4 flex gap-2 flex-wrap">

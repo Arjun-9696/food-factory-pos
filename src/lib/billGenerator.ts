@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import jsPDF from "jspdf";
 
 interface BillItem {

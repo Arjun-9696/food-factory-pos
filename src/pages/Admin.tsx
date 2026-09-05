@@ -8,7 +8,7 @@ import { uploadImageToCloudinary } from "@/lib/uploadImage";
 import { 
   ArrowLeft, Plus, Pencil, Trash2, ShieldAlert, Save, X, Upload, Loader2, 
   Package, CheckCircle, XCircle, Search, Grid, List, Coffee, Database,
-  ArrowUpDown, Eye, EyeOff, ChevronDown, ChevronUp, BarChart3, Users, ReceiptIndianRupee
+  ArrowUpDown, Eye, EyeOff, ChevronDown, ChevronUp, BarChart3, Users, ReceiptIndianRupee, Coins
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
@@ -30,6 +30,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { getCategoryEmoji, CATEGORY_EMOJI_MAP, AVAILABLE_EMOJIS } from "@/data/categories";
+import GoogleReviewsManager from "@/components/admin/GoogleReviewsManager";
 
 interface Product {
   id: string;
@@ -41,6 +42,96 @@ interface Product {
   is_veg: boolean;
   image: string;
   available: boolean;
+  details?: Record<string, unknown> | null;
+}
+
+interface ProductDetailsForm {
+  shortDescription: string;
+  compareAtPrice: string;
+  calories: string;
+  protein: string;
+  carbs: string;
+  fat: string;
+  servingLabel: string;
+  ingredients: string;
+  spiceLevel: "" | "mild" | "medium" | "spicy";
+  prepTimeMinutes: string;
+  isVegan: boolean;
+  isJainFriendly: boolean;
+  containsDairy: boolean;
+  containsGluten: boolean;
+  containsNuts: boolean;
+  isInHouseMade: boolean;
+  isBestseller: boolean;
+}
+
+const EMPTY_DETAILS: ProductDetailsForm = {
+  shortDescription: "", compareAtPrice: "", calories: "", protein: "", carbs: "", fat: "",
+  servingLabel: "", ingredients: "", spiceLevel: "", prepTimeMinutes: "",
+  isVegan: false, isJainFriendly: false, containsDairy: false, containsGluten: false,
+  containsNuts: false, isInHouseMade: false, isBestseller: false,
+};
+
+function detailsToForm(details: Record<string, unknown> | null | undefined): ProductDetailsForm {
+  if (!details) return { ...EMPTY_DETAILS };
+  const n = (details.nutrition && typeof details.nutrition === "object" ? details.nutrition : {}) as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const numStr = (v: unknown) => (typeof v === "number" && !isNaN(v) ? String(v) : "");
+  return {
+    shortDescription: str(details.shortDescription),
+    compareAtPrice: numStr(details.compareAtPrice),
+    calories: numStr(n.calories),
+    protein: numStr(n.protein),
+    carbs: numStr(n.carbs),
+    fat: numStr(n.fat),
+    servingLabel: str(n.servingLabel),
+    ingredients: Array.isArray(details.ingredients)
+      ? details.ingredients.filter((i): i is string => typeof i === "string").join(", ")
+      : "",
+    spiceLevel: details.spiceLevel === "mild" || details.spiceLevel === "medium" || details.spiceLevel === "spicy"
+      ? details.spiceLevel
+      : "",
+    prepTimeMinutes: numStr(details.prepTimeMinutes),
+    isVegan: details.isVegan === true,
+    isJainFriendly: details.isJainFriendly === true,
+    containsDairy: details.containsDairy === true,
+    containsGluten: details.containsGluten === true,
+    containsNuts: details.containsNuts === true,
+    isInHouseMade: details.isInHouseMade === true,
+    isBestseller: details.isBestseller === true,
+  };
+}
+
+function formToDetails(f: ProductDetailsForm): Record<string, unknown> | null {
+  const num = (v: string): number | undefined => {
+    const parsed = Number(v);
+    return v !== "" && !isNaN(parsed) && parsed > 0 ? parsed : undefined;
+  };
+  const nutrition: Record<string, unknown> = {};
+  if (num(f.calories) != null) nutrition.calories = num(f.calories);
+  if (num(f.protein) != null) nutrition.protein = num(f.protein);
+  if (num(f.carbs) != null) nutrition.carbs = num(f.carbs);
+  if (num(f.fat) != null) nutrition.fat = num(f.fat);
+  if (f.servingLabel.trim()) nutrition.servingLabel = f.servingLabel.trim();
+
+  const ingredients = f.ingredients.split(",").map(s => s.trim()).filter(Boolean);
+
+  const details: Record<string, unknown> = {};
+  if (f.shortDescription.trim()) details.shortDescription = f.shortDescription.trim();
+  if (num(f.compareAtPrice) != null) details.compareAtPrice = num(f.compareAtPrice);
+  if (Object.keys(nutrition).length) details.nutrition = nutrition;
+  if (ingredients.length) details.ingredients = ingredients;
+  if (f.spiceLevel) details.spiceLevel = f.spiceLevel;
+  if (num(f.prepTimeMinutes) != null) details.prepTimeMinutes = num(f.prepTimeMinutes);
+  if (f.isVegan) details.isVegan = true;
+  if (f.isJainFriendly) details.isJainFriendly = true;
+  if (f.containsDairy) details.containsDairy = true;
+  if (f.containsGluten) details.containsGluten = true;
+  if (f.containsNuts) details.containsNuts = true;
+  if (f.isInHouseMade) details.isInHouseMade = true;
+  if (f.isBestseller) details.isBestseller = true;
+
+  return Object.keys(details).length ? details : null;
 }
 
 const DEFAULT_CATEGORIES = [
@@ -113,6 +204,7 @@ export default function Admin() {
   const [selectCategoryOpen, setSelectCategoryOpen] = useState(false);
   const [editCategoryOpen, setEditCategoryOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<{name: string; emoji: string} | null>(null);
+  const [deletingCategory, setDeletingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryEmoji, setNewCategoryEmoji] = useState("🍴");
   const [categoryEmojis, setCategoryEmojis] = useState<Record<string, string>>(CATEGORY_EMOJI_MAP);
@@ -138,7 +230,7 @@ export default function Admin() {
         const emojis: Record<string, string> = { ...CATEGORY_EMOJI_MAP };
         const ids: Record<string, string> = {};
         
-        data.forEach((doc: any) => {
+        data.forEach((doc: { name?: string; emoji?: string; id?: string }) => {
           if (doc.name) {
             emojis[doc.name] = doc.emoji || CATEGORY_EMOJI_MAP[doc.name] || "🍴";
             ids[doc.name] = doc.id;
@@ -162,9 +254,11 @@ export default function Admin() {
     image: string;
     imagePreview: string;
     available: boolean;
+    details: ProductDetailsForm;
   }>({
     name: "", description: "", category: DEFAULT_CATEGORIES[0], price: 0,
     foodType: "veg", image: "", imagePreview: "", available: true,
+    details: { ...EMPTY_DETAILS },
   });
 
   const checkDatabase = async () => {
@@ -182,8 +276,9 @@ export default function Admin() {
       console.log("Database ready!");
       setDbStatus("ready");
       return true;
-    } catch (error: any) {
-      console.log("Database not ready:", error.message);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.log("Database not ready:", msg);
       setDbStatus("error");
       return false;
     }
@@ -213,7 +308,7 @@ export default function Admin() {
       
       console.log("Admin products fetched:", data?.length);
       
-      const productsList = (data || []).map((doc: any) => ({
+      const productsList = (data || []).map((doc: { food_type?: string; image?: string; [key: string]: unknown }) => ({
         ...doc,
         foodType: doc.food_type || "veg",
         image: doc.image || "",
@@ -221,8 +316,9 @@ export default function Admin() {
       
       setProducts(productsList);
       extractCategories(productsList);
-    } catch (error: any) {
-      console.log("Fetch error:", error.message);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.log("Fetch error:", msg);
       setProducts([]);
       setCategories(["All", ...DEFAULT_CATEGORIES]);
     }
@@ -297,6 +393,7 @@ export default function Admin() {
       image: p.image || "",
       imagePreview: p.image,
       available: p.available,
+      details: detailsToForm(p.details),
     });
     setIsNew(false);
   };
@@ -306,13 +403,14 @@ export default function Admin() {
     setForm({
       name: "", description: "", category: categories[1] || DEFAULT_CATEGORIES[0], price: 0,
       foodType: "veg", image: "", imagePreview: "", available: true,
+      details: { ...EMPTY_DETAILS },
     });
     setIsNew(true);
   };
 
   const cancelEdit = () => {
     setEditingProduct(null);
-    setForm({ name: "", description: "", category: categories[1] || DEFAULT_CATEGORIES[0], price: 0, foodType: "veg", image: "", imagePreview: "", available: true });
+    setForm({ name: "", description: "", category: categories[1] || DEFAULT_CATEGORIES[0], price: 0, foodType: "veg", image: "", imagePreview: "", available: true, details: { ...EMPTY_DETAILS } });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -332,9 +430,10 @@ export default function Admin() {
       setForm(prev => ({ ...prev, image: url, imagePreview: tempPreview }));
       toast.success("Image uploaded!");
       if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (err: any) {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error("Storage upload failed:", err);
-      toast.error(err.message || "Failed to upload image");
+      toast.error(msg || "Failed to upload image");
     } finally {
       setUploading(false);
     }
@@ -347,7 +446,8 @@ export default function Admin() {
     }
     try {
       const now = new Date().toISOString();
-      const data = {
+      const details = formToDetails(form.details);
+      const data: Record<string, unknown> = {
         id: crypto.randomUUID(),
         name: form.name.trim(),
         description: form.description || "",
@@ -360,16 +460,22 @@ export default function Admin() {
         created_at: now,
         updated_at: now,
       };
-      
+      if (details) data.details = details;
+
       if (isNew) {
-        const { error } = await supabase
-          .from(SUPABASE_CONFIG.PRODUCTS_TABLE)
-          .insert(data);
-        
+        let error;
+        ({ error } = await supabase.from(SUPABASE_CONFIG.PRODUCTS_TABLE).insert(data));
+        // `details` column may not exist yet — retry without it so the core save still succeeds.
+        if (error && data.details !== undefined) {
+          console.warn("Retrying save without product details:", error.message);
+          delete data.details;
+          ({ error } = await supabase.from(SUPABASE_CONFIG.PRODUCTS_TABLE).insert(data));
+          if (!error) toast.warning("Saved without menu details — run the details migration to enable them.");
+        }
         if (error) throw error;
         toast.success("Product added successfully!");
       } else {
-        const updateData = {
+        const updateData: Record<string, unknown> = {
           name: form.name.trim(),
           description: form.description || "",
           category: form.category,
@@ -380,19 +486,24 @@ export default function Admin() {
           image: form.image || null,
           updated_at: now,
         };
-        
-        const { error } = await supabase
-          .from(SUPABASE_CONFIG.PRODUCTS_TABLE)
-          .update(updateData)
-          .eq("id", editingProduct.id);
-        
+        if (details) updateData.details = details;
+
+        let error;
+        ({ error } = await supabase.from(SUPABASE_CONFIG.PRODUCTS_TABLE).update(updateData).eq("id", editingProduct.id));
+        if (error && updateData.details !== undefined) {
+          console.warn("Retrying save without product details:", error.message);
+          delete updateData.details;
+          ({ error } = await supabase.from(SUPABASE_CONFIG.PRODUCTS_TABLE).update(updateData).eq("id", editingProduct.id));
+          if (!error) toast.warning("Saved without menu details — run the details migration to enable them.");
+        }
         if (error) throw error;
         toast.success("Product updated successfully!");
       }
       cancelEdit();
       setTimeout(() => fetchProducts(), 100);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to save");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error(msg || "Failed to save");
     }
   };
 
@@ -547,6 +658,65 @@ export default function Admin() {
     setEditCategoryOpen(true);
   };
 
+  const handleDeleteCategory = async () => {
+    if (!editingCategory) return;
+    const catName = editingCategory.name;
+    const productCount = products.filter(p => p.category === catName).length;
+
+    const confirmed = window.confirm(
+      `Delete category "${catName}"?\n\nThis will PERMANENTLY delete the category and ALL ${productCount} product(s) in it.\n\nThis cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingCategory(true);
+    try {
+      // Delete all products in this category
+      const { error: productsError } = await supabase
+        .from(SUPABASE_CONFIG.PRODUCTS_TABLE)
+        .delete()
+        .eq("category", catName);
+      if (productsError) throw productsError;
+
+      // Delete the category row itself
+      if (categoryIds[catName]) {
+        const { error: categoryError } = await supabase
+          .from(SUPABASE_CONFIG.CATEGORIES_TABLE)
+          .delete()
+          .eq("id", categoryIds[catName]);
+        if (categoryError) throw categoryError;
+      }
+
+      // Update local state
+      setCategories(prev => prev.filter(c => c !== catName));
+      setCategoryEmojis(prev => {
+        const updated = { ...prev };
+        delete updated[catName];
+        return updated;
+      });
+      setCategoryIds(prev => {
+        const updated = { ...prev };
+        delete updated[catName];
+        return updated;
+      });
+      if (filterCategory === catName) {
+        setFilterCategory("All");
+      }
+
+      setEditingCategory(null);
+      setEditCategoryOpen(false);
+      setNewCategoryName("");
+      setNewCategoryEmoji("🍴");
+
+      toast.success(`Category "${catName}" deleted (${productCount} products removed)!`);
+      fetchProducts();
+    } catch (error) {
+      console.error("Failed to delete category:", error);
+      toast.error("Failed to delete category");
+    } finally {
+      setDeletingCategory(false);
+    }
+  };
+
   const stats = {
     total: products.length,
     available: products.filter(p => p.available !== false).length,
@@ -610,6 +780,9 @@ export default function Admin() {
             </Link>
             <Link to="/admin/orders" className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
               <ReceiptIndianRupee className="w-4 h-4" /> Orders
+            </Link>
+            <Link to="/admin/loyalty" className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-yellow-500/20">
+              <Coins className="w-4 h-4" /> Loyalty
             </Link>
             {dbStatus === "ready" && (
               <button onClick={startNew} className="px-3 py-2.5 rounded-xl cart-gradient text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20">
@@ -714,6 +887,9 @@ export default function Admin() {
             <p className="text-xs text-muted-foreground">Categories</p>
           </motion.div>
         </div>
+
+        {/* Top Google Reviews - admin curated */}
+        <GoogleReviewsManager />
 
         {/* Filter Tabs */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -1017,6 +1193,105 @@ export default function Admin() {
                   </label>
                 </div>
 
+                {/* Menu Details — optional attributes rendered on the product page */}
+                <details className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 px-4 py-3">
+                  <summary className="cursor-pointer select-none text-sm font-semibold text-foreground dark:text-white">
+                    Menu Details <span className="font-normal text-muted-foreground">(optional — shown on the product page)</span>
+                  </summary>
+
+                  <div className="mt-4 space-y-4">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Short description (for the product page)</label>
+                      <input type="text" value={form.details.shortDescription} onChange={(e) => setForm({ ...form, details: { ...form.details, shortDescription: e.target.value } })}
+                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white placeholder:text-gray-400"
+                        placeholder="A quick, appetizing one-liner" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Compare-at price ₹ (shows discount)</label>
+                        <input type="number" min="0" value={form.details.compareAtPrice} onChange={(e) => setForm({ ...form, details: { ...form.details, compareAtPrice: e.target.value } })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white" placeholder="e.g. 199" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Prep time (minutes)</label>
+                        <input type="number" min="0" value={form.details.prepTimeMinutes} onChange={(e) => setForm({ ...form, details: { ...form.details, prepTimeMinutes: e.target.value } })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white" placeholder="e.g. 10" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Ingredients (comma separated)</label>
+                      <textarea value={form.details.ingredients} onChange={(e) => setForm({ ...form, details: { ...form.details, ingredients: e.target.value } })}
+                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white resize-none h-16"
+                        placeholder="House-made patty, Fresh lettuce, Tomato, Signature sauce" />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-2 block">Nutrition per serving (leave blank if unknown)</label>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                        <input type="number" min="0" value={form.details.calories} onChange={(e) => setForm({ ...form, details: { ...form.details, calories: e.target.value } })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white" placeholder="kcal" aria-label="Calories" />
+                        <input type="number" min="0" value={form.details.protein} onChange={(e) => setForm({ ...form, details: { ...form.details, protein: e.target.value } })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white" placeholder="Protein g" aria-label="Protein grams" />
+                        <input type="number" min="0" value={form.details.carbs} onChange={(e) => setForm({ ...form, details: { ...form.details, carbs: e.target.value } })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white" placeholder="Carbs g" aria-label="Carbs grams" />
+                        <input type="number" min="0" value={form.details.fat} onChange={(e) => setForm({ ...form, details: { ...form.details, fat: e.target.value } })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white" placeholder="Fat g" aria-label="Fat grams" />
+                        <input type="text" value={form.details.servingLabel} onChange={(e) => setForm({ ...form, details: { ...form.details, servingLabel: e.target.value } })}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-foreground dark:text-white" placeholder="per burger" aria-label="Serving label" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Spice level</label>
+                        <Select value={form.details.spiceLevel || "none"} onValueChange={(v) => setForm({ ...form, details: { ...form.details, spiceLevel: v === "none" ? "" : v as ProductDetailsForm["spiceLevel"] } })}>
+                          <SelectTrigger className="w-full rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-foreground dark:text-white">
+                            <SelectValue placeholder="None" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-gray-800">
+                            <SelectItem value="none">Not specified</SelectItem>
+                            <SelectItem value="mild">Mild</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="spicy">Spicy</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 content-start pt-1">
+                        <label className="flex items-center gap-1.5 text-xs text-foreground dark:text-white cursor-pointer">
+                          <input type="checkbox" checked={form.details.isInHouseMade} onChange={(e) => setForm({ ...form, details: { ...form.details, isInHouseMade: e.target.checked } })} className="w-3.5 h-3.5 rounded" />
+                          In-house made
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-foreground dark:text-white cursor-pointer">
+                          <input type="checkbox" checked={form.details.isBestseller} onChange={(e) => setForm({ ...form, details: { ...form.details, isBestseller: e.target.checked } })} className="w-3.5 h-3.5 rounded" />
+                          Bestseller
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-foreground dark:text-white cursor-pointer">
+                          <input type="checkbox" checked={form.details.containsDairy} onChange={(e) => setForm({ ...form, details: { ...form.details, containsDairy: e.target.checked } })} className="w-3.5 h-3.5 rounded" />
+                          Dairy
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-foreground dark:text-white cursor-pointer">
+                          <input type="checkbox" checked={form.details.containsGluten} onChange={(e) => setForm({ ...form, details: { ...form.details, containsGluten: e.target.checked } })} className="w-3.5 h-3.5 rounded" />
+                          Gluten
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-foreground dark:text-white cursor-pointer">
+                          <input type="checkbox" checked={form.details.containsNuts} onChange={(e) => setForm({ ...form, details: { ...form.details, containsNuts: e.target.checked } })} className="w-3.5 h-3.5 rounded" />
+                          Nuts
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-foreground dark:text-white cursor-pointer">
+                          <input type="checkbox" checked={form.details.isVegan} onChange={(e) => setForm({ ...form, details: { ...form.details, isVegan: e.target.checked } })} className="w-3.5 h-3.5 rounded" />
+                          Vegan
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-foreground dark:text-white cursor-pointer">
+                          <input type="checkbox" checked={form.details.isJainFriendly} onChange={(e) => setForm({ ...form, details: { ...form.details, isJainFriendly: e.target.checked } })} className="w-3.5 h-3.5 rounded" />
+                          Jain-friendly
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+
                 <button onClick={handleSave} className="w-full py-3 rounded-xl cart-gradient text-white font-semibold flex items-center justify-center gap-2">
                   <Save className="w-4 h-4" /> {isNew ? "Add Product" : "Save Changes"}
                 </button>
@@ -1124,6 +1399,17 @@ export default function Admin() {
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 This will rename the category and update all {products.filter(p => p.category === editingCategory?.name).length} products with this category.
               </p>
+            </div>
+            <div className="pt-3 mt-1 border-t border-gray-200 dark:border-gray-600">
+              <p className="text-xs font-semibold text-red-500 dark:text-red-400 mb-2">Danger Zone</p>
+              <button
+                onClick={handleDeleteCategory}
+                disabled={deletingCategory}
+                className="w-full px-4 py-2.5 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+              >
+                {deletingCategory ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {deletingCategory ? "Deleting..." : `Delete Category & All ${products.filter(p => p.category === editingCategory?.name).length} Products`}
+              </button>
             </div>
           </div>
           <DialogFooter>

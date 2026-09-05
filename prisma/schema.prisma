@@ -17,16 +17,19 @@ datasource db {
 // ============================================================================
 
 model User {
-  id        String   @id @default(uuid())
-  name      String?
-  email     String?  @unique
-  phone     String?
-  role      String   @default("customer")
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid())
+  name        String?
+  email       String?  @unique
+  phone       String?
+  role        String   @default("customer")
+  coinBalance Int      @default(0) @map("coin_balance")
+  createdAt   DateTime @default(now()) @map("created_at")
 
-  orders    Order[]
-  profile   Profile?
-  cart      Cart[]
+  orders            Order[]
+  profile           Profile?
+  cart              Cart[]
+  coinTransactions  CoinTransaction[]
+  coinRedemptions   CoinRedemption[]
 
   @@map("users")
 }
@@ -77,12 +80,44 @@ model Product {
   isVeg       Boolean  @default(true) @map("is_veg")
   image       String?
   available   Boolean  @default(true)
+  details     Json?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+
+  reviews ProductReview[]
 
   @@index([category])
   @@index([available])
   @@map("products")
+}
+
+model ProductReview {
+  id        String   @id @default(uuid())
+  productId String   @map("product_id")
+  userId    String   @map("user_id")
+  userName  String   @default("Customer") @map("user_name")
+  rating    Int
+  comment   String   @default("")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([productId, userId])
+  @@index([productId, createdAt(sort: Desc)])
+  @@map("product_reviews")
+}
+
+model GoogleReview {
+  id           String   @id @default(uuid())
+  authorName   String   @map("author_name")
+  rating       Int
+  comment      String   @default("")
+  relativeTime String   @default("") @map("relative_time")
+  displayOrder Int      @default(0) @map("display_order")
+  isVisible    Boolean  @default(true) @map("is_visible")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([displayOrder, createdAt(sort: Desc)])
+  @@map("google_reviews")
 }
 
 model Customer {
@@ -109,10 +144,17 @@ model Order {
   customerPhone   String?     @map("customer_phone")
   subtotal        Float
   discount        Float       @default(0)
+  coinDiscount    Float       @default(0) @map("coin_discount")
   gst             Float       @default(0)
   grandTotal      Float       @map("grand_total")
   status          String      @default("pending")
   paymentMethod   String?     @map("payment_method")
+  deliveryAddress Json?       @map("delivery_address")
+  pendingAt       DateTime?   @map("pending_at")
+  preparingAt     DateTime?   @map("preparing_at")
+  readyAt         DateTime?   @map("ready_at")
+  completedAt     DateTime?   @map("completed_at")
+  cancelledAt     DateTime?   @map("cancelled_at")
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
@@ -151,4 +193,45 @@ model Cart {
 
   @@index([userId])
   @@map("cart")
+}
+
+// ============================================================================
+// Food Factory Coins — Loyalty / Rewards System
+// ============================================================================
+
+model CoinTransaction {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  type          String
+  amount        Int
+  balanceBefore Int      @map("balance_before")
+  balanceAfter  Int      @map("balance_after")
+  description   String
+  referenceType String   @map("reference_type")
+  referenceId   String?  @map("reference_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([referenceType, referenceId, type])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([referenceId])
+  @@index([type])
+  @@map("coin_transactions")
+}
+
+model CoinRedemption {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  coinsUsed      Int      @map("coins_used")
+  discountAmount Float    @map("discount_amount")
+  orderId        String?  @map("order_id")
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([orderId])
+  @@map("coin_redemptions")
 }

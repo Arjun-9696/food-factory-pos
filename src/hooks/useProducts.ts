@@ -1,18 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
-import { supabase, SUPABASE_CONFIG, isSupabaseConfigured } from "@/lib/supabaseClient";
 import { type MenuItem, menuItems as fallbackMenuItems, categories as fallbackCategories } from "@/data/menu";
+import { loadAllProducts } from "@/lib/productsApi";
+import { supabase } from "@/lib/supabaseClient";
 import { CATEGORY_EMOJI_MAP } from "@/data/categories";
 
 export interface CategoryData {
   name: string;
   emoji: string;
-}
-
-function getImageUrl(image: string): string {
-  if (!image) return "";
-  if (image.startsWith('data:') || image.startsWith('blob:')) return image;
-  if (image.startsWith('http')) return image;
-  return image;
 }
 
 export function useProducts() {
@@ -42,7 +36,7 @@ export function useProducts() {
       const dbCategoryNames = new Set<string>();
 
       if (data && data.length > 0) {
-        data.forEach((doc: any) => {
+        data.forEach((doc: { name?: string; emoji?: string }) => {
           if (doc.name) {
             dbCategoryNames.add(doc.name);
             dbNames.push(doc.name);
@@ -81,63 +75,38 @@ export function useProducts() {
     }
   };
 
-  const fetchProducts = useCallback(async () => {
-    if (!isSupabaseConfigured()) {
-      console.log("Supabase is not configured, loading local fallback data...");
-      setProducts(fallbackMenuItems);
-      setCategories([...fallbackCategories] as string[]);
-      setCategoryEmojis(CATEGORY_EMOJI_MAP);
-      setLoading(false);
-      return;
-    }
-
+  const fetchProducts = useCallback(async (options?: { fresh?: boolean }) => {
+    setLoading(true);
     try {
-      console.log("Fetching products from Supabase...");
-      const { data: productsData, error: productsError } = await supabase
-        .from("products")
-        .select("*")
-        .eq("available", true)
-        .order("category", { ascending: true });
+      // Shared cached loader — dedupes concurrent requests and avoids
+      // refetching when navigating between the menu and product pages.
+      const { items: allItems, ok } = await loadAllProducts(options);
 
-      if (productsError) {
-        console.error("Products fetch error:", productsError);
-        throw productsError;
+      if (!ok) {
+        // Supabase not configured or unreachable — exact legacy fallback behavior.
+        setProducts(fallbackMenuItems);
+        setCategories([...fallbackCategories] as string[]);
+        setCategoryEmojis(CATEGORY_EMOJI_MAP);
+        return;
       }
 
-      console.log("Products fetched:", productsData?.length);
-
-      const items: MenuItem[] = (productsData || []).map((doc: any) => ({
-        id: doc.id,
-        name: doc.name,
-        description: doc.description || "",
-        category: doc.category,
-        price: Number(doc.price) || 0,
-        foodType: doc.food_type || "veg",
-        image: getImageUrl(doc.image),
-        available: doc.available,
-      }));
-
+      // Storefront shows only available items (query previously filtered this).
+      const items = allItems.filter((p) => p.available !== false);
       setProducts(items);
-      
+
       const productCategories = Array.from(new Set(items.map((p) => p.category))).sort();
       const categoriesData = await fetchCategoriesFromDB(productCategories);
-      
+
       setCategories(categoriesData.names);
       setCategoryEmojis(categoriesData.emojis);
-    } catch (error) {
-      console.error("Error fetching products from database, falling back to local data:", error);
-      setProducts(fallbackMenuItems);
-      setCategories([...fallbackCategories] as string[]);
-      setCategoryEmojis(CATEGORY_EMOJI_MAP);
     } finally {
       setLoading(false);
     }
   }, []);
 
   const refresh = useCallback(() => {
-    setLoading(true);
-    fetchProducts();
-  }, []);
+    fetchProducts({ fresh: true });
+  }, [fetchProducts]);
 
   return { products, categories, categoryEmojis, loading, refresh };
 }

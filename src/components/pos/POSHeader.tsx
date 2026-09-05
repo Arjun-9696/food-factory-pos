@@ -18,6 +18,8 @@ interface POSHeaderProps {
   cartItems?: { item: MenuItem; quantity: number }[];
   onAddToCart?: (item: MenuItem) => void;
   onUpdateQuantity?: (itemId: string, qty: number) => void;
+  /** Hide the search inputs (used on pages like the product detail page). */
+  showSearch?: boolean;
 }
 
 export function POSHeader({ 
@@ -30,6 +32,7 @@ export function POSHeader({
   cartItems = [],
   onAddToCart,
   onUpdateQuantity,
+  showSearch = true,
 }: POSHeaderProps) {
   const { isAdmin } = useAuth();
   const [isMobile, setIsMobile] = useState(false);
@@ -109,8 +112,9 @@ export function POSHeader({
   </div>
 </div>
 
-          {/* Search */}
-          <div className="flex-1 max-w-md relative hidden md:block">
+          {/* Search (hidden on pages that opt out) */}
+          {showSearch && (
+            <div className="flex-1 max-w-md relative hidden md:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
             <input
               type="text"
@@ -133,6 +137,7 @@ export function POSHeader({
               </div>
             )}
           </div>
+          )}
 
           {/* Right controls */}
           <div className="flex items-center gap-2">
@@ -160,16 +165,18 @@ export function POSHeader({
         </div>
 
         {/* Mobile search */}
-        <div className="mt-3 md:hidden relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
-          <input
-            type="text"
-            placeholder="Search menu..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-secondary/80 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          />
-        </div>
+        {showSearch && (
+          <div className="mt-3 md:hidden relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+            <input
+              type="text"
+              placeholder="Search menu..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-secondary/80 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            />
+          </div>
+        )}
       </div>
     </header>
   );

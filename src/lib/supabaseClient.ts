@@ -14,6 +14,7 @@ export const isSupabaseConfigured = () => {
 };
 
 // Create a dummy mock client to prevent any network requests if not configured or points to dead project
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const createMockSupabaseClient = () => {
   const mockHandler = {
     get(target: any, prop: string): any {
@@ -51,6 +52,7 @@ const createMockSupabaseClient = () => {
   };
   return new Proxy({}, mockHandler);
 };
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const supabase = isSupabaseConfigured()
   ? createClient(supabaseUrl, supabaseAnonKey)

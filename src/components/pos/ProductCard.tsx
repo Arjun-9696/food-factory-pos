@@ -14,6 +14,8 @@ import { getOptimizedImageUrl } from "@/lib/uploadImage"
 interface ProductCardProps {
   item: MenuItem
   onAddPosition?: (position: { x: number; y: number }) => void
+  /** Optional: opens the product detail page when the image or name is clicked. */
+  onOpen?: () => void
 }
 
 const categoryColors: Record<string, string> = {
@@ -132,7 +134,7 @@ const generateDescription = (item: MenuItem): string => {
   return categoryDescriptions[item.category] || "Fresh & Delicious - Quality ingredients";
 }
 
-export function ProductCard({ item, onAddPosition }: ProductCardProps) {
+export function ProductCard({ item, onAddPosition, onOpen }: ProductCardProps) {
   const { items, addItem, updateQuantity } = useCart()
   const cartItem = items.find(i => i.item.id === item.id)
   const qty = cartItem?.quantity ?? 0
@@ -181,16 +183,20 @@ export function ProductCard({ item, onAddPosition }: ProductCardProps) {
   src={getOptimizedImageUrl(item.image, 400)}
   alt={item.name}
   loading="lazy"
+  onClick={onOpen}
+  role={onOpen ? "button" : undefined}
+  tabIndex={onOpen ? 0 : undefined}
+  onKeyDown={onOpen ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } } : undefined}
   onLoad={() => setImgLoaded(true)}
   onError={(e) => {
     (e.target as HTMLImageElement).src =
     "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop&q=80"
   }}
   className={`
-    w-full h-full object-cover 
+    w-full h-full object-contain bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20 ${onOpen ? "cursor-pointer" : ""}
     transition-all duration-500 ease-out
     ${imgLoaded ? "opacity-100 scale-100" : "opacity-0 scale-105"}
-    group-hover:scale-125 group-hover:brightness-90
+    group-hover:scale-110 group-hover:brightness-90
   `}
 />
 </Lens>
@@ -238,7 +244,13 @@ export function ProductCard({ item, onAddPosition }: ProductCardProps) {
     <div className="flex flex-col gap-1">
 
       {/* Product Name */}
-      <h3 className="font-bold text-base text-foreground truncate leading-tight dark:text-white">
+      <h3
+        onClick={onOpen}
+        role={onOpen ? "button" : undefined}
+        tabIndex={onOpen ? 0 : undefined}
+        onKeyDown={onOpen ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } } : undefined}
+        className={`font-bold text-base text-foreground truncate leading-tight dark:text-white ${onOpen ? "cursor-pointer hover:text-orange-600 dark:hover:text-orange-400 transition-colors" : ""}`}
+      >
         {item.name}
       </h3>
 
